@@ -1,0 +1,55 @@
+# Framework stub — promoted to docker-compose.yaml on first `yarn start`.
+# The promoted file is gitignored. See companion docs in @guidify-ai/vapi-studio.
+#
+# Local framework source: sibling ../guidify-ai (override with VAPI_STUDIO_CONTEXT).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: studio
+      POSTGRES_PASSWORD: studio
+      POSTGRES_DB: sample_landing_llm
+    ports:
+      - "15435:5432"
+    volumes:
+      - sample_llm_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studio -d sample_landing_llm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      additional_contexts:
+        vapi-studio: ${VAPI_STUDIO_CONTEXT:-../guidify-ai}
+    ports:
+      - "9998:9998"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://studio:studio@postgres:5432/sample_landing_llm
+      PORT: 9998
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:9998}
+      PROJECT_UUID: ${PROJECT_UUID:-4a13e554-972b-4713-b208-15b71bff0493}
+      POC_BRAIN_PROFILE: ${POC_BRAIN_PROFILE:-planner}
+      STUDIO_CONSOLE_DEBUG: ${STUDIO_CONSOLE_DEBUG:-1}
+      LOG_DAYS: ${LOG_DAYS:-14}
+      LOG_DIR: ${LOG_DIR:-/app/logs}
+      FORCE_COLOR: "1"
+      POC_COMPANY_NAME: ${POC_COMPANY_NAME:-Sample Studio}
+      VAPI_TRANSFER_DESTINATION: ${VAPI_TRANSFER_DESTINATION:-+15551234567}
+      VAPI_END_CALL_TOOL_NAME: ${VAPI_END_CALL_TOOL_NAME:-end_call_tool}
+      CONFIG_DIR: /app/config
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  sample_llm_pgdata:
