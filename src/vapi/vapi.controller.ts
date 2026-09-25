@@ -42,14 +42,13 @@ import {
   phoneCaller,
   withCallerMetadata,
 } from '../caller/caller-identity';
-import {
-  ProjectUuidGuard,
-  projectIdFromRequest,
-} from '../project/project-uuid.guard';
-import { projectVapiBasePath } from '../project/project.config';
+import { LOCAL_PROJECT_ID, projectVapiBasePath } from '../project/project.config';
 
-@Controller(':projectUuid/vapi')
-@UseGuards(ProjectUuidGuard)
+/**
+ * Vapi ingress — webhook + Custom LLM SSE.
+ * One deploy = host-scoped `/vapi/...` (no project UUID in the path).
+ */
+@Controller('vapi')
 export class VapiController {
   constructor(
     private readonly webhookHandler: VapiWebhookHandler,
@@ -63,6 +62,10 @@ export class VapiController {
     private readonly workflows: WorkflowLoader,
   ) {}
 
+  private get projectId(): string {
+    return LOCAL_PROJECT_ID;
+  }
+
   @Post('webhook')
   @HttpCode(200)
   @UseGuards(VapiWebhookGuard)
@@ -70,7 +73,7 @@ export class VapiController {
     @Req() req: Request,
     @Body() body: Record<string, unknown>,
   ) {
-    const projectId = projectIdFromRequest(req);
+    const projectId = this.projectId;
     const result = await this.webhookHandler.handle(body, projectId);
     return result.body ?? { ok: true };
   }
@@ -84,7 +87,7 @@ export class VapiController {
     @Res() res: Response,
   ): Promise<void> {
     return this.handleCustomLlm({
-      projectId: projectIdFromRequest(req),
+      projectId: this.projectId,
       body,
       headers,
       req,
@@ -95,7 +98,7 @@ export class VapiController {
 
   /**
    * Per-module Custom LLM URL for Vapi Squad members:
-   * POST /:projectUuid/vapi/:moduleId/chat/completions
+   * POST /vapi/:moduleId/chat/completions
    * Also accepts header X-Studio-Module.
    */
   @Post(':moduleId/chat/completions')
@@ -107,7 +110,7 @@ export class VapiController {
     @Res() res: Response,
   ): Promise<void> {
     return this.handleCustomLlm({
-      projectId: projectIdFromRequest(req),
+      projectId: this.projectId,
       body,
       headers,
       req,
@@ -171,8 +174,8 @@ export class VapiController {
     }
 
     const ingressPath = moduleHint
-      ? `${projectVapiBasePath(projectId)}/${moduleHint}/chat/completions`
-      : `${projectVapiBasePath(projectId)}/chat/completions`;
+      ? `${projectVapiBasePath()}/${moduleHint}/chat/completions`
+      : `${projectVapiBasePath()}/chat/completions`;
     const ingressRow = await this.ingress.record({
       projectId,
       kind: 'custom-llm',

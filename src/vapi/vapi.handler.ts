@@ -24,7 +24,7 @@ export class VapiWebhookHandler {
     const message = (raw.message ?? raw) as Record<string, unknown>;
     const call = message.call as { id?: string } | undefined;
     const callId = call?.id;
-    const webhookPath = `${projectVapiBasePath(projectId)}/webhook`;
+    const webhookPath = `${projectVapiBasePath()}/webhook`;
     if (!callId) {
       await this.ingress.record({
         projectId,

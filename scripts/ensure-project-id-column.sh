@@ -6,21 +6,30 @@ set -euo pipefail
 ROOT="$(CDPATH="" cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# Must match LOCAL_PROJECT_ID in src/project/project.config.ts
+LOCAL_PROJECT_ID='4a13e554-972b-4713-b208-15b71bff0493'
+
 IDENTITY_FILE="${ROOT}/config/project.identity.json"
 if [[ ! -f "$IDENTITY_FILE" ]]; then
   echo "Missing ${IDENTITY_FILE}" >&2
   exit 1
 fi
 
-PROJECT_UUID="$(
+read_slug_name() {
   python3 -c '
 import json, pathlib, sys
 d = json.loads(pathlib.Path("config/project.identity.json").read_text())
-print(str(d["id"]).strip().lower())
+slug = str(d.get("slug", "")).strip() or "sample-landing-llm"
+name = str(d.get("name", "")).strip() or "Sample Landing LLM"
+print(slug)
+print(name)
 '
-)"
+}
+IDENTITY_LINES="$(read_slug_name)"
+PROJECT_SLUG="$(printf '%s\n' "$IDENTITY_LINES" | sed -n '1p')"
+PROJECT_NAME="$(printf '%s\n' "$IDENTITY_LINES" | sed -n '2p')"
 
-echo ">> Ensuring conversations.project_id (backfill ${PROJECT_UUID})"
+echo ">> Ensuring conversations.project_id (backfill ${LOCAL_PROJECT_ID})"
 
 docker compose exec -T postgres psql -U studio -d sample_landing_llm -v ON_ERROR_STOP=1 <<SQL
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -34,18 +43,18 @@ CREATE TABLE IF NOT EXISTS projects (
 );
 
 INSERT INTO projects (id, slug, name)
-SELECT '${PROJECT_UUID}', 'sample-landing-llm', 'Sample Landing LLM'
-WHERE NOT EXISTS (SELECT 1 FROM projects WHERE id = '${PROJECT_UUID}');
+SELECT '${LOCAL_PROJECT_ID}', '${PROJECT_SLUG}', '${PROJECT_NAME}'
+WHERE NOT EXISTS (SELECT 1 FROM projects WHERE id = '${LOCAL_PROJECT_ID}');
 
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project_id uuid;
 UPDATE conversations
-SET project_id = '${PROJECT_UUID}'
+SET project_id = '${LOCAL_PROJECT_ID}'
 WHERE project_id IS NULL;
 ALTER TABLE conversations ALTER COLUMN project_id SET NOT NULL;
 
 ALTER TABLE provider_ingress ADD COLUMN IF NOT EXISTS project_id uuid;
 UPDATE provider_ingress
-SET project_id = '${PROJECT_UUID}'
+SET project_id = '${LOCAL_PROJECT_ID}'
 WHERE project_id IS NULL;
 
 -- Old unique was provider_call_id alone; composite unique is (project_id, provider_call_id).

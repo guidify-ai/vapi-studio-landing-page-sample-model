@@ -35,7 +35,6 @@ import { FormResumeService } from './forms/form-resume.service';
 import { CallerPersistenceModule } from './caller/caller-persistence.module';
 import { CallerProfileEntity } from './caller/caller-profile.entity';
 import { ProjectSeedService } from './project/project-seed.service';
-import { ProjectUuidGuard } from './project/project-uuid.guard';
 import { VapiController } from './vapi/vapi.controller';
 import { VapiWebhookGuard } from './vapi/vapi.guard';
 import { VapiWebhookHandler } from './vapi/vapi.handler';
@@ -174,7 +173,6 @@ function resolveBrainAdapter() {
     OutboundCallService,
     FormResumeService,
     ProjectSeedService,
-    ProjectUuidGuard,
     VapiWebhookGuard,
     VapiWebhookHandler,
     VapiStrategyTriager,

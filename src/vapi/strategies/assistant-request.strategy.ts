@@ -204,13 +204,12 @@ export class AssistantRequestStrategy implements VapiStrategy {
     const publicBase = (
       process.env.PUBLIC_BASE_URL ?? 'http://localhost:9999'
     ).replace(/\/$/, '');
-    const webhookUrl = projectWebhookUrl(publicBase, command.projectId);
+    const webhookUrl = projectWebhookUrl(publicBase);
 
     // Default PoC path: one transient assistant, flat Custom LLM URL.
     // Squad-only: per-module URL when workflow.yaml is loaded.
     const customLlmUrl = projectChatCompletionsUrl(
       publicBase,
-      command.projectId,
       squad
         ? typeof runtime.metadata.activeModuleId === 'string'
           ? runtime.metadata.activeModuleId

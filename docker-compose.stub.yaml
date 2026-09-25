@@ -25,7 +25,7 @@ services:
       context: .
       dockerfile: Dockerfile
       additional_contexts:
-        vapi-studio: ${VAPI_STUDIO_CONTEXT:-../guidify-ai}
+        vapi-studio: ${VAPI_STUDIO_CONTEXT:-../vapi-studio}
     ports:
       - "9998:9998"
     env_file:
@@ -34,7 +34,8 @@ services:
       DATABASE_URL: postgres://studio:studio@postgres:5432/sample_landing_llm
       PORT: 9998
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:9998}
-      PROJECT_UUID: ${PROJECT_UUID:-4a13e554-972b-4713-b208-15b71bff0493}
+      PROJECT_NAME: ${PROJECT_NAME:-Sample Landing LLM — Planner}
+      PROJECT_SLUG: ${PROJECT_SLUG:-sample-landing-llm}
       POC_BRAIN_PROFILE: ${POC_BRAIN_PROFILE:-planner}
       STUDIO_CONSOLE_DEBUG: ${STUDIO_CONSOLE_DEBUG:-1}
       LOG_DAYS: ${LOG_DAYS:-14}

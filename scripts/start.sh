@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One command: baked Nest app + Postgres (Docker/OrbStack) + ngrok.
 # Usage: yarn start
-# Project UUID comes from config/project.identity.json (seeded into DB on app boot).
+# Human identity (name/slug) from config/project.identity.json; Vapi paths are /vapi/...
 set -euo pipefail
 
 ROOT="$(CDPATH="" cd "$(dirname "$0")/.." && pwd)"
@@ -13,27 +13,25 @@ IDENTITY_FILE="${ROOT}/config/project.identity.json"
 
 if [[ ! -f "$IDENTITY_FILE" ]]; then
   echo "Missing ${IDENTITY_FILE}" >&2
-  echo "Create config/project.identity.json (see this repo’s config/ or the Vapi Studio docs)." >&2
+  echo "Create config/project.identity.json with name + slug." >&2
   exit 1
 fi
 
-# Canonical identity — written once into project.identity.json; never uuidV4 at runtime.
+# Canonical identity — name/slug only (DB id is LOCAL_PROJECT_ID in code).
 read_identity() {
   python3 -c '
 import json, pathlib, sys
 d = json.loads(pathlib.Path("config/project.identity.json").read_text())
-for key in ("id", "slug", "name"):
+for key in ("slug", "name"):
     if not str(d.get(key, "")).strip():
         sys.exit(f"project.identity.json missing {key}")
-print(str(d["id"]).strip().lower())
 print(str(d["slug"]).strip())
 print(str(d["name"]).strip())
 '
 }
 IDENTITY_LINES="$(read_identity)"
-PROJECT_UUID="$(printf '%s\n' "$IDENTITY_LINES" | sed -n '1p')"
-PROJECT_SLUG="$(printf '%s\n' "$IDENTITY_LINES" | sed -n '2p')"
-PROJECT_NAME="$(printf '%s\n' "$IDENTITY_LINES" | sed -n '3p')"
+PROJECT_SLUG="$(printf '%s\n' "$IDENTITY_LINES" | sed -n '1p')"
+PROJECT_NAME="$(printf '%s\n' "$IDENTITY_LINES" | sed -n '2p')"
 
 if ! command -v ngrok >/dev/null 2>&1; then
   echo "ngrok is required on PATH for yarn start." >&2
@@ -62,28 +60,37 @@ if [[ ! -f .env ]]; then
   cp .env.example .env
 fi
 
-# Mirror UUID into .env for compose/operators (identity file remains source of truth).
-PROJECT_UUID="$PROJECT_UUID" python3 -c '
+# Mirror name/slug into .env for compose/operators (identity file remains source of truth).
+PROJECT_NAME="$PROJECT_NAME" PROJECT_SLUG="$PROJECT_SLUG" python3 -c '
 import os
 from pathlib import Path
-uuid = os.environ["PROJECT_UUID"]
+name = os.environ["PROJECT_NAME"]
+slug = os.environ["PROJECT_SLUG"]
 path = Path(".env")
 lines = path.read_text().splitlines() if path.exists() else []
-out, seen = [], False
+out = []
+seen_name = seen_slug = False
 for line in lines:
-    if line.startswith("PROJECT_UUID="):
-        out.append(f"PROJECT_UUID={uuid}")
-        seen = True
+    if line.startswith("PROJECT_NAME="):
+        out.append(f"PROJECT_NAME={name}")
+        seen_name = True
+    elif line.startswith("PROJECT_SLUG="):
+        out.append(f"PROJECT_SLUG={slug}")
+        seen_slug = True
+    elif line.startswith("PROJECT_UUID="):
+        continue  # drop legacy env
     else:
         out.append(line)
-if not seen:
-    out.append(f"PROJECT_UUID={uuid}")
+if not seen_name:
+    out.append(f"PROJECT_NAME={name}")
+if not seen_slug:
+    out.append(f"PROJECT_SLUG={slug}")
 path.write_text("\n".join(out) + "\n")
 '
 
-echo ">> Project ${PROJECT_NAME} (${PROJECT_SLUG}) id=${PROJECT_UUID}"
-echo ">> Starting Docker stack on :${PORT} (edit docker-compose.yaml for extra local services if needed)"
-echo ">> App boot upserts this UUID into the projects table (create or exist)"
+echo ">> Project ${PROJECT_NAME} (${PROJECT_SLUG}) on :${PORT}"
+echo ">> Starting Docker stack (edit docker-compose.yaml for extra local services if needed)"
+echo ">> App boot upserts LOCAL_PROJECT_ID into the projects table (create or exist)"
 docker compose up -d --build postgres
 echo ">> Waiting for Postgres"
 for _ in $(seq 1 60); do
@@ -198,10 +205,9 @@ else
   PUBLIC_BASE_URL="$public_url" docker compose up -d app
   echo
   echo "Project:                ${PROJECT_NAME} (${PROJECT_SLUG})"
-  echo "Project UUID:           ${PROJECT_UUID}"
   echo "Local app:              http://localhost:${PORT}"
-  echo "Webhook (Vapi):         ${public_url}/${PROJECT_UUID}/vapi/webhook"
-  echo "Custom LLM (Vapi):      ${public_url}/${PROJECT_UUID}/vapi/chat/completions"
+  echo "Webhook (Vapi):         ${public_url}/vapi/webhook"
+  echo "Custom LLM (Vapi):      ${public_url}/vapi/chat/completions"
   echo "Flow Studio:            http://localhost:${PORT}/flow"
   echo "Conversations:          http://localhost:${PORT}/conversations"
   echo "ngrok inspector:        http://127.0.0.1:4040"

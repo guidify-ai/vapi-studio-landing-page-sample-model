@@ -1,21 +1,23 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
+/** Local human identity — one app deploy = one project (name + slug). */
 export interface ProjectIdentity {
-  /** Public ingress UUID — path segment in /{id}/vapi/... Never regenerate. */
-  id: string;
   slug: string;
   name: string;
 }
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+/**
+ * Stable internal DB key for the single local project row.
+ * Not used in public URLs — each fork has its own host/port.
+ * Kept as the sample's historical UUID so existing DB rows keep working.
+ */
+export const LOCAL_PROJECT_ID = '4a13e554-972b-4713-b208-15b71bff0493';
 
 let cached: ProjectIdentity | null = null;
 
 /**
- * Canonical project identity — `config/project.identity.json`.
- * Written once by `yarn new-project` (or checked in). Not generated at runtime.
+ * Canonical name/slug from config/project.identity.json.
  */
 export function loadProjectIdentity(configDir?: string): ProjectIdentity {
   if (cached) return cached;
@@ -23,52 +25,35 @@ export function loadProjectIdentity(configDir?: string): ProjectIdentity {
   const path = join(dir, 'project.identity.json');
   if (!existsSync(path)) {
     throw new Error(
-      `Missing ${path}. Create it with yarn new-project (repo root) or copy project.identity.json — do not invent a UUID at runtime.`,
+      `Missing ${path}. Create it with name + slug — do not invent a UUID at runtime.`,
     );
   }
   const raw = JSON.parse(readFileSync(path, 'utf8')) as Partial<ProjectIdentity>;
-  const id = String(raw.id ?? '').trim().toLowerCase();
   const slug = String(raw.slug ?? '').trim();
   const name = String(raw.name ?? '').trim();
-  if (!UUID_RE.test(id)) {
-    throw new Error(`project.identity.json id must be a UUID (got "${raw.id ?? ''}")`);
-  }
-  if (!slug) {
-    throw new Error('project.identity.json slug is required');
-  }
-  if (!name) {
-    throw new Error('project.identity.json name is required');
-  }
-  cached = { id, slug, name };
+  if (!slug || !name) throw new Error('project.identity.json needs name and slug');
+  cached = { slug, name };
   return cached;
 }
 
-/** @deprecated prefer loadProjectIdentity().id */
+/** Internal DB project id only — not a public URL segment. */
 export function resolveProjectUuid(): string {
-  return loadProjectIdentity().id;
+  return LOCAL_PROJECT_ID;
 }
 
-export function projectVapiBasePath(projectUuid = resolveProjectUuid()): string {
-  return `/${projectUuid}/vapi`;
+export function projectVapiBasePath(): string {
+  return '/vapi';
 }
 
-export function projectWebhookUrl(
-  publicBaseUrl: string,
-  projectUuid = resolveProjectUuid(),
-): string {
-  const base = publicBaseUrl.replace(/\/$/, '');
-  return `${base}${projectVapiBasePath(projectUuid)}/webhook`;
+export function projectWebhookUrl(publicBaseUrl: string): string {
+  return publicBaseUrl.replace(/\/$/, '') + projectVapiBasePath() + '/webhook';
 }
 
 export function projectChatCompletionsUrl(
   publicBaseUrl: string,
-  projectUuid = resolveProjectUuid(),
   moduleId?: string | null,
 ): string {
-  const base = publicBaseUrl.replace(/\/$/, '');
-  const root = projectVapiBasePath(projectUuid);
-  if (moduleId?.trim()) {
-    return `${base}${root}/${moduleId.trim()}/chat/completions`;
-  }
-  return `${base}${root}/chat/completions`;
+  const root = publicBaseUrl.replace(/\/$/, '') + projectVapiBasePath();
+  if (moduleId?.trim()) return root + '/' + moduleId.trim() + '/chat/completions';
+  return root + '/chat/completions';
 }

@@ -1,50 +1,44 @@
 # Vapi Studio — sample landing LLM
 
-Public **showcase app** for [**@guidify-ai/vapi-studio**](https://www.npmjs.com/package/@guidify-ai/vapi-studio). This is not the framework — it **depends** on it, the same way your production bot should.
-
-```bash
-yarn add @guidify-ai/vapi-studio@0.1.0
-```
+Showcase NestJS app for **[@guidify-ai/vapi-studio](https://www.npmjs.com/package/@guidify-ai/vapi-studio)**. Not the framework — it **depends** on it.
 
 | | |
 | --- | --- |
 | Port | **9998** |
 | Operator UI | http://127.0.0.1:9998/flow · `/conversations` |
-| Framework | [@guidify-ai/vapi-studio](https://github.com/guidify-ai/vapi-studio) |
+| Framework | [guidify-ai/vapi-studio](https://github.com/guidify-ai/vapi-studio) |
+| This repo | [guidify-ai/vapi-studio-landing-page-sample-model](https://github.com/guidify-ai/vapi-studio-landing-page-sample-model) |
 
-## Run locally
-
-Needs Docker + [ngrok](https://ngrok.com/download). Sibling layout for local framework builds:
+## How it fits (platform)
 
 ```text
-~/work/
-  guidify-ai/                         # framework clone (or use npm only)
-  vapi-studio-sample-landing-llm/     # this repo
+~/work/guidify-ai/
+  Makefile
+  vapi-studio/                        # framework (git + npm)
+  vapi-studio-sample-landing-llm/     # this app
+  vapi-studio-landing/                # marketing site → calls :9998
 ```
+
+Day-to-day (spoof next Studio versions from local files):
 
 ```bash
-cp .env.example .env   # set OPENAI_API_KEY if using ChatGPT Brain
-yarn start             # Compose + ngrok; promotes docker-compose.stub.yaml once
+cd ~/work/guidify-ai
+make spoof-studio   # yarn build framework + sample dep = file:../vapi-studio
+make start          # also landing + ngrok + Vapi keys
 ```
 
-Until `0.1.0` is on npm, point Docker at the sibling clone (`additional_contexts.vapi-studio` defaults to `../guidify-ai`) and for host installs:
+After publish, optionally:
 
 ```bash
-# temporary local link while developing against an unpublished framework
-yarn add file:../guidify-ai
+make use-npm-studio   # sample dep = 0.1.0 from npm
 ```
 
-After publish, pin the registry version again:
+## Run this app alone
 
 ```bash
-yarn add @guidify-ai/vapi-studio@0.1.0
+cp .env.example .env
+cd .. && make spoof-studio    # platform root = guidify-ai/
+cd vapi-studio-sample-landing-llm && yarn start
 ```
 
-## What this sample shows
-
-- Nest wiring: `VapiStudioModule.forRoot`, Studio UI mount
-- Planner-style `flow.yaml` + code intentions / nodes
-- Vapi Custom LLM + webhook routes
-- Event hooks (`src/shadows/`) without a durable event store in the framework
-
-Northern stars only in this README — copy lives in nodes and `config/flow.yaml`.
+Docker build context for the framework defaults to `../vapi-studio`.

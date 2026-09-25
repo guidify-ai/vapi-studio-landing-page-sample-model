@@ -15,7 +15,7 @@ import {
   type TurnExecutionResult,
 } from '@guidify-ai/vapi-studio';
 import { brainConfig } from '../brain/brain.config';
-import { resolveProjectUuid } from '../project/project.config';
+import { LOCAL_PROJECT_ID } from '../project/project.config';
 import { StudioEventBuffer } from './studio-event-buffer';
 import { StudioLiveSpeechBuffer } from './studio-live-speech.buffer';
 import { FormResumeService } from '../forms/form-resume.service';
@@ -99,7 +99,7 @@ export class StudioSessionService {
     const providerCallId = `studio-${randomUUID()}`;
     const brainProfileId = process.env.POC_BRAIN_PROFILE ?? 'planner';
 
-    const projectId = resolveProjectUuid();
+    const projectId = LOCAL_PROJECT_ID;
     const runtime = await this.bootstrap.bootstrap({
       projectId,
       providerCallId,
@@ -200,7 +200,7 @@ export class StudioSessionService {
     const providerCallId = `studio-${randomUUID()}`;
     const brainProfileId = process.env.POC_BRAIN_PROFILE ?? 'planner';
 
-    const projectId = resolveProjectUuid();
+    const projectId = LOCAL_PROJECT_ID;
     const runtime = await this.bootstrap.bootstrap({
       projectId,
       providerCallId,

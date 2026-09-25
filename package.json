@@ -1,12 +1,12 @@
 {
-  "name": "vapi-studio-sample-landing-llm",
+  "name": "vapi-studio-landing-page-sample-model",
   "version": "0.1.0",
   "description": "Public sample NestJS app — Planner LLM showcase for @guidify-ai/vapi-studio",
   "license": "MIT",
   "private": true,
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/guidify-ai/vapi-studio-sample-landing-llm.git"
+    "url": "git+https://github.com/guidify-ai/vapi-studio-landing-page-sample-model.git"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -17,7 +17,7 @@
     "test": "bash scripts/run-tests.sh"
   },
   "dependencies": {
-    "@guidify-ai/vapi-studio": "0.1.0",
+    "@guidify-ai/vapi-studio": "file:../vapi-studio",
     "@nestjs/common": "^11.0.12",
     "@nestjs/core": "^11.0.12",
     "@nestjs/platform-express": "^11.0.12",
