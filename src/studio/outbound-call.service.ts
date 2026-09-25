@@ -41,9 +41,21 @@ export function normalizePhoneE164(raw: string): string | null {
   return null;
 }
 
+type VapiCallSnapshot = {
+  id?: string;
+  status?: string;
+  endedReason?: string;
+  endedMessage?: string;
+  message?: string;
+  error?: string;
+};
+
 /**
  * Place a Vapi outbound call that runs the same planner Custom LLM assistant,
  * with LP intake seeded in call metadata for Conversation bootstrap.
+ *
+ * Success mail only after the call has actually started toward the guest number
+ * (not merely after Vapi accepted the create-call HTTP request).
  */
 @Injectable()
 export class OutboundCallService {
@@ -82,15 +94,6 @@ export class OutboundCallService {
       };
     }
 
-    // Always notify Guidify — even if dial fails / Vapi unset.
-    await this.leadMail.notifyOutboundCallRequest({
-      companyName,
-      contactName,
-      contactEmail,
-      phone,
-      notes: input.notes,
-    });
-
     const apiKey = process.env.VAPI_API_KEY?.trim();
     const phoneNumberId = process.env.VAPI_PHONE_NUMBER_ID?.trim();
     const assistantId =
@@ -101,8 +104,16 @@ export class OutboundCallService {
       this.log.warn(
         'Outbound dial skipped — set VAPI_API_KEY, VAPI_PHONE_NUMBER_ID, and POC_ASSISTANT_ID',
       );
+      await this.leadMail.notifyOutboundCallFailed({
+        companyName,
+        contactName,
+        contactEmail,
+        phone,
+        notes: input.notes,
+        reason: 'vapi_not_configured',
+      });
       return {
-        ok: true,
+        ok: false,
         dialed: false,
         normalizedPhone: phone,
         fromNumberReadable,
@@ -146,24 +157,65 @@ export class OutboundCallService {
           },
         }),
       });
-      const body = (await res.json().catch(() => ({}))) as {
-        id?: string;
-        message?: string;
-        error?: string;
-      };
-      if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as VapiCallSnapshot;
+      if (!res.ok || !body.id) {
+        const reason =
+          body.message || body.error || `Vapi HTTP ${res.status}`;
         this.log.warn(
-          `Vapi outbound failed ${res.status}: ${JSON.stringify(body).slice(0, 300)}`,
+          `Vapi outbound create failed ${res.status}: ${JSON.stringify(body).slice(0, 300)}`,
         );
+        await this.leadMail.notifyOutboundCallFailed({
+          companyName,
+          contactName,
+          contactEmail,
+          phone,
+          notes: input.notes,
+          reason,
+        });
         return {
           ok: false,
           dialed: false,
           normalizedPhone: phone,
           fromNumberReadable,
-          error: body.message || body.error || `Vapi HTTP ${res.status}`,
+          error: reason,
         };
       }
-      this.log.log(`Outbound call placed id=${body.id || '?'} to=${phone}`);
+
+      const started = await this.waitUntilCallStarted(apiKey, body.id);
+      if (!started.ok) {
+        this.log.warn(
+          `Outbound call ${body.id} did not start to=${phone}: ${started.reason}`,
+        );
+        await this.leadMail.notifyOutboundCallFailed({
+          companyName,
+          contactName,
+          contactEmail,
+          phone,
+          notes: input.notes,
+          reason: started.reason,
+          callId: body.id,
+        });
+        return {
+          ok: false,
+          dialed: false,
+          callId: body.id,
+          normalizedPhone: phone,
+          fromNumberReadable,
+          error: started.reason,
+        };
+      }
+
+      this.log.log(
+        `Outbound call started id=${body.id} to=${phone} status=${started.status}`,
+      );
+      await this.leadMail.notifyOutboundCallStarted({
+        companyName,
+        contactName,
+        contactEmail,
+        phone,
+        notes: input.notes,
+        callId: body.id,
+      });
       return {
         ok: true,
         dialed: true,
@@ -172,14 +224,95 @@ export class OutboundCallService {
         fromNumberReadable,
       };
     } catch (err) {
-      this.log.warn(`Vapi outbound error: ${err}`);
+      const reason = err instanceof Error ? err.message : String(err);
+      this.log.warn(`Vapi outbound error: ${reason}`);
+      await this.leadMail.notifyOutboundCallFailed({
+        companyName,
+        contactName,
+        contactEmail,
+        phone,
+        notes: input.notes,
+        reason,
+      });
       return {
         ok: false,
         dialed: false,
         normalizedPhone: phone,
         fromNumberReadable,
-        error: err instanceof Error ? err.message : String(err),
+        error: reason,
       };
     }
+  }
+
+  /**
+   * Vapi may return 200 + call id while the PSTN leg never starts
+   * (e.g. Twilio "Account not allowed to call…"). Poll until ringing /
+   * in-progress, or until a call.start.* failure is visible.
+   */
+  private async waitUntilCallStarted(
+    apiKey: string,
+    callId: string,
+  ): Promise<{ ok: true; status: string } | { ok: false; reason: string }> {
+    const attempts = 16;
+    const delayMs = 500;
+    let last: VapiCallSnapshot = { id: callId };
+
+    for (let i = 0; i < attempts; i++) {
+      if (i > 0) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+      try {
+        const res = await fetch(`https://api.vapi.ai/call/${callId}`, {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            Accept: 'application/json',
+          },
+        });
+        if (!res.ok) {
+          continue;
+        }
+        last = (await res.json().catch(() => ({}))) as VapiCallSnapshot;
+        const status = String(last.status || '').toLowerCase();
+        const endedReason = String(last.endedReason || '');
+
+        if (
+          status === 'ringing' ||
+          status === 'in-progress' ||
+          status === 'forwarding'
+        ) {
+          return { ok: true, status };
+        }
+
+        if (status === 'ended' || endedReason) {
+          if (
+            endedReason.startsWith('call.start.') ||
+            endedReason.includes('error-get-transport')
+          ) {
+            const detail =
+              last.endedMessage || endedReason || 'call failed to start';
+            return { ok: false, reason: detail };
+          }
+          // Ended for another reason after having progressed — treat as started.
+          if (endedReason && !endedReason.startsWith('call.start.')) {
+            return { ok: true, status: status || 'ended' };
+          }
+        }
+
+        // queued / unknown — keep polling
+      } catch {
+        // ignore transient poll errors
+      }
+    }
+
+    // Still queued after wait — carrier accepted create; count as started.
+    const status = String(last.status || 'queued').toLowerCase();
+    if (status === 'queued' || status === 'ringing' || status === 'in-progress') {
+      return { ok: true, status };
+    }
+    const detail =
+      last.endedMessage ||
+      last.endedReason ||
+      `call did not start (status=${last.status || 'unknown'})`;
+    return { ok: false, reason: detail };
   }
 }

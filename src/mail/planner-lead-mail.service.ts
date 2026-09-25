@@ -99,38 +99,90 @@ export class PlannerLeadMailService {
     });
   }
 
-  /** Landing “Call me” — no Conversation ctx yet; still alert Guidify. */
-  async notifyOutboundCallRequest(input: {
+  /**
+   * Landing “Call me” — success only after Vapi has started dialing the guest number.
+   * Outcome QUOTE_REQUEST (commercial call-me intent).
+   */
+  async notifyOutboundCallStarted(input: {
     companyName: string;
     contactName: string;
     contactEmail: string;
     phone: string;
     notes?: string;
+    callId: string;
+  }): Promise<void> {
+    await this.sendOutboundMail({
+      outcome: 'QUOTE_REQUEST',
+      companyName: input.companyName,
+      contactName: input.contactName,
+      contactEmail: input.contactEmail,
+      phone: input.phone,
+      why: `Outbound call started to ${input.phone} (Vapi call ${input.callId}).${
+        input.notes ? ` Notes: ${input.notes.slice(0, 200)}` : ''
+      }`,
+      closedReason: 'outbound_call_started',
+      logLabel: 'Outbound-call started mail',
+    });
+  }
+
+  /**
+   * Landing “Call me” — dial never started (config / Twilio / Vapi create failure).
+   * Outcome FAILED_LEAD — not a success quote.
+   */
+  async notifyOutboundCallFailed(input: {
+    companyName: string;
+    contactName: string;
+    contactEmail: string;
+    phone: string;
+    notes?: string;
+    reason: string;
+    callId?: string;
+  }): Promise<void> {
+    await this.sendOutboundMail({
+      outcome: 'FAILED_LEAD',
+      companyName: input.companyName,
+      contactName: input.contactName,
+      contactEmail: input.contactEmail,
+      phone: input.phone,
+      why: `Outbound call did NOT start to ${input.phone}. ${input.reason.slice(0, 400)}${
+        input.callId ? ` (Vapi call ${input.callId})` : ''
+      }${input.notes ? ` Notes: ${input.notes.slice(0, 200)}` : ''}`,
+      closedReason: 'outbound_call_failed',
+      logLabel: 'Outbound-call failed mail',
+    });
+  }
+
+  private async sendOutboundMail(input: {
+    outcome: LeadMailOutcome;
+    companyName: string;
+    contactName: string;
+    contactEmail: string;
+    phone: string;
+    why: string;
+    closedReason: string;
+    logLabel: string;
   }): Promise<void> {
     if (!this.enabled()) {
-      this.log.log('Resend disabled — skipping outbound-call mail');
+      this.log.log(`Resend disabled — skipping ${input.logLabel}`);
       return;
     }
     const to = this.toAddr();
     const key = process.env.RESEND_API_KEY?.trim();
     if (!to || !key) {
-      this.log.warn('Resend env missing — skipping outbound-call mail');
+      this.log.warn(`Resend env missing — skipping ${input.logLabel}`);
       return;
     }
     const company = input.companyName.trim() || 'unknown';
-    const why = `Guest requested an outbound triage call to ${input.phone}.${
-      input.notes ? ` Notes: ${input.notes.slice(0, 200)}` : ''
-    }`;
     const html = renderLeadMail({
-      outcome: 'QUOTE_REQUEST',
-      why,
+      outcome: input.outcome,
+      why: input.why,
       sessionId: `outbound-${Date.now().toString(36)}`,
       contact: {
         name: input.contactName,
         email: input.contactEmail,
         company,
       },
-      closedReason: 'outbound_call_request',
+      closedReason: input.closedReason,
     });
     try {
       const res = await fetch('https://api.resend.com/emails', {
@@ -142,7 +194,7 @@ export class PlannerLeadMailService {
         body: JSON.stringify({
           from: this.fromAddr(),
           to: [to],
-          subject: leadMailSubject('QUOTE_REQUEST', company),
+          subject: leadMailSubject(input.outcome, company),
           html: html.replace(
             '</ul>',
             `<li><strong>Phone:</strong> ${escapeHtml(input.phone)}</li></ul>`,
@@ -154,9 +206,7 @@ export class PlannerLeadMailService {
         return;
       }
       const data = (await res.json().catch(() => ({}))) as { id?: string };
-      this.log.log(
-        `Outbound-call mail sent id=${data.id || '?'} to=${to}`,
-      );
+      this.log.log(`${input.logLabel} sent id=${data.id || '?'} to=${to}`);
     } catch (err) {
       this.log.warn(`Resend failed: ${err}`);
     }

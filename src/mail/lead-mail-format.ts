@@ -35,7 +35,7 @@ export const LEAD_MAIL_OUTCOMES: Record<
     code: 'FAILED_LEAD',
     label: 'Failed / abandoned lead',
     meaning:
-      'Session closed without a usable draft or clear hire intent — low priority.',
+      'Session closed without a usable draft, clear hire intent, or a started outbound call — low priority / not a success quote.',
   },
 };
 
