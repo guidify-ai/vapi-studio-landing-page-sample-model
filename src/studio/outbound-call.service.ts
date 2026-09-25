@@ -16,16 +16,30 @@ export type OutboundCallResult = {
   dialed: boolean;
   callId?: string;
   error?: string;
+  /** Guest-facing guidance when dial fails (e.g. call the bot inbound). */
+  message?: string;
   normalizedPhone?: string;
   /** Human-readable caller ID (from VAPI_PHONE_NUMBER_READABLE). */
   fromNumberReadable?: string;
 };
+
+/** Guest-facing tip when outbound cannot start — inbound uses the same assistant. */
+export function outboundFailureInboundHint(
+  fromNumberReadable?: string,
+): string {
+  const n = (fromNumberReadable || '').trim();
+  if (n) {
+    return `We couldn't place the outbound call right now. Call ${n} instead — same sample conversation (inbound).`;
+  }
+  return `We couldn't place the outbound call right now. Call our Studio number instead — same sample conversation (inbound).`;
+}
 
 /** Display string for the number guests will see on caller ID. */
 export function outboundFromNumberReadable(): string | undefined {
   const raw = process.env.VAPI_PHONE_NUMBER_READABLE?.trim();
   return raw || undefined;
 }
+
 
 /** US-friendly E.164 normalize; returns null if unusable. */
 export function normalizePhoneE164(raw: string): string | null {
@@ -104,6 +118,7 @@ export class OutboundCallService {
       this.log.warn(
         'Outbound dial skipped — set VAPI_API_KEY, VAPI_PHONE_NUMBER_ID, and POC_ASSISTANT_ID',
       );
+      const message = outboundFailureInboundHint(fromNumberReadable);
       await this.leadMail.notifyOutboundCallFailed({
         companyName,
         contactName,
@@ -111,6 +126,7 @@ export class OutboundCallService {
         phone,
         notes: input.notes,
         reason: 'vapi_not_configured',
+        inboundHint: message,
       });
       return {
         ok: false,
@@ -118,6 +134,7 @@ export class OutboundCallService {
         normalizedPhone: phone,
         fromNumberReadable,
         error: 'vapi_not_configured',
+        message,
       };
     }
 
@@ -171,6 +188,8 @@ export class OutboundCallService {
           phone,
           notes: input.notes,
           reason,
+          fromNumberReadable,
+          inboundHint: outboundFailureInboundHint(fromNumberReadable),
         });
         return {
           ok: false,
@@ -178,6 +197,7 @@ export class OutboundCallService {
           normalizedPhone: phone,
           fromNumberReadable,
           error: reason,
+          message: outboundFailureInboundHint(fromNumberReadable),
         };
       }
 
@@ -194,6 +214,8 @@ export class OutboundCallService {
           notes: input.notes,
           reason: started.reason,
           callId: body.id,
+          fromNumberReadable,
+          inboundHint: outboundFailureInboundHint(fromNumberReadable),
         });
         return {
           ok: false,
@@ -202,6 +224,7 @@ export class OutboundCallService {
           normalizedPhone: phone,
           fromNumberReadable,
           error: started.reason,
+          message: outboundFailureInboundHint(fromNumberReadable),
         };
       }
 
@@ -233,6 +256,8 @@ export class OutboundCallService {
         phone,
         notes: input.notes,
         reason,
+        fromNumberReadable,
+        inboundHint: outboundFailureInboundHint(fromNumberReadable),
       });
       return {
         ok: false,
@@ -240,6 +265,7 @@ export class OutboundCallService {
         normalizedPhone: phone,
         fromNumberReadable,
         error: reason,
+        message: outboundFailureInboundHint(fromNumberReadable),
       };
     }
   }

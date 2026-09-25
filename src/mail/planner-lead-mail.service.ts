@@ -137,7 +137,15 @@ export class PlannerLeadMailService {
     notes?: string;
     reason: string;
     callId?: string;
+    fromNumberReadable?: string;
+    inboundHint?: string;
   }): Promise<void> {
+    const from = (input.fromNumberReadable || '').trim();
+    const inboundTip =
+      (input.inboundHint || '').trim() ||
+      (from
+        ? `Guest advised to call ${from} inbound (same sample).`
+        : 'Guest advised to call the Studio number inbound (same sample).');
     await this.sendOutboundMail({
       outcome: 'FAILED_LEAD',
       companyName: input.companyName,
@@ -146,7 +154,7 @@ export class PlannerLeadMailService {
       phone: input.phone,
       why: `Outbound call did NOT start to ${input.phone}. ${input.reason.slice(0, 400)}${
         input.callId ? ` (Vapi call ${input.callId})` : ''
-      }${input.notes ? ` Notes: ${input.notes.slice(0, 200)}` : ''}`,
+      }. ${inboundTip}${input.notes ? ` Notes: ${input.notes.slice(0, 200)}` : ''}`,
       closedReason: 'outbound_call_failed',
       logLabel: 'Outbound-call failed mail',
     });
