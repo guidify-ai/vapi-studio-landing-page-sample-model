@@ -1,5 +1,5 @@
 /**
- * Shared Resend email pattern for Guidify outbound from the Studio sample.
+ * Shared Resend email pattern for Guidify AI outbound from the Studio sample.
  * Outcomes: SUCCESS_LEAD | QUOTE_REQUEST | TRANSFER_HUMAN | FAILED_LEAD
  */
 
@@ -17,19 +17,19 @@ export const LEAD_MAIL_OUTCOMES: Record<
     code: 'SUCCESS_LEAD',
     label: 'Success lead',
     meaning:
-      'Engaged visitor with a usable design draft — worth Guidify follow-up.',
+      'Engaged visitor with a usable design draft — worth Guidify AI follow-up.',
   },
   QUOTE_REQUEST: {
     code: 'QUOTE_REQUEST',
     label: 'Quote request',
     meaning:
-      'Visitor said Help me build it — clear commercial intent to hire Guidify.',
+      'Visitor said Help me build it — clear commercial intent to hire Guidify AI.',
   },
   TRANSFER_HUMAN: {
     code: 'TRANSFER_HUMAN',
     label: 'Transfer to human',
     meaning:
-      'Guest asked for a human. Conversation wrapped (no live handoff on web) — Guidify should follow up.',
+      'Guest asked for a human. Conversation wrapped (no live handoff on web) — Guidify AI should follow up.',
   },
   FAILED_LEAD: {
     code: 'FAILED_LEAD',

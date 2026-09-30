@@ -1,10 +1,8 @@
-# MockBrain — happy-path planner demo (company → use case → discovery → sample).
+# MockBrain fallback for landing demo (most turns use resolveIntention).
+# Support happy path when Brain is consulted.
+name: planner
 sequence:
-  - company_does_collected
-  - use_case_qualify
-  - discovery_answer
-  - discovery_answer
-  - discovery_proceed
-  - integrations_none
-  - help_build
+  - entry_support
+  - support_consent_yes
+  - phone_reuse_yes
   - nothing_else
