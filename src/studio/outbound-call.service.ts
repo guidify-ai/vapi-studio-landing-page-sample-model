@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PlannerLeadMailService } from '../mail/planner-lead-mail.service';
+import { projectWebhookUrl } from '../project/project.config';
+import { sampleTransientAssistant } from '../vapi/strategies/assistant-request.strategy';
 
 export type OutboundCallInput = {
   companyName: string;
@@ -34,9 +36,56 @@ export function outboundFailureInboundHint(
   return `We couldn't place the outbound call right now. Call our Studio number instead — same sample conversation (inbound).`;
 }
 
+/**
+ * `twilio` (default): imported Twilio number + saved assistant in the main Vapi org.
+ * `vapi`: Vapi-native number in a separate org (VAPI_NATIVE_*), inline assistant
+ * unless VAPI_NATIVE_ASSISTANT_ID is set. Saved assistants are org-scoped.
+ */
+export type OutboundMode = 'twilio' | 'vapi';
+
+export function outboundMode(): OutboundMode {
+  return process.env.VAPI_OUTBOUND_MODE?.trim().toLowerCase() === 'vapi'
+    ? 'vapi'
+    : 'twilio';
+}
+
+type OutboundDialConfig = {
+  mode: OutboundMode;
+  apiKey?: string;
+  phoneNumberId?: string;
+  /** Saved assistant id, or null → send the inline sample assistant. */
+  assistantId: string | null;
+};
+
+function outboundDialConfig(): OutboundDialConfig {
+  const env = (k: string) => process.env[k]?.trim() || undefined;
+  if (outboundMode() === 'vapi') {
+    return {
+      mode: 'vapi',
+      apiKey: env('VAPI_NATIVE_API_KEY'),
+      phoneNumberId: env('VAPI_NATIVE_PHONE_NUMBER_ID'),
+      assistantId: env('VAPI_NATIVE_ASSISTANT_ID') ?? null,
+    };
+  }
+  return {
+    mode: 'twilio',
+    apiKey: env('VAPI_API_KEY'),
+    phoneNumberId: env('VAPI_PHONE_NUMBER_ID'),
+    assistantId: env('POC_ASSISTANT_ID') ?? env('VAPI_ASSISTANT_ID') ?? null,
+  };
+}
+
+/** The Twilio line — the only number wired to this sample for inbound calls. */
+export function inboundNumberReadable(): string | undefined {
+  return process.env.VAPI_PHONE_NUMBER_READABLE?.trim() || undefined;
+}
+
 /** Display string for the number guests will see on caller ID. */
 export function outboundFromNumberReadable(): string | undefined {
-  const raw = process.env.VAPI_PHONE_NUMBER_READABLE?.trim();
+  const raw =
+    outboundMode() === 'vapi'
+      ? process.env.VAPI_NATIVE_PHONE_NUMBER_READABLE?.trim()
+      : process.env.VAPI_PHONE_NUMBER_READABLE?.trim();
   return raw || undefined;
 }
 
@@ -108,17 +157,20 @@ export class OutboundCallService {
       };
     }
 
-    const apiKey = process.env.VAPI_API_KEY?.trim();
-    const phoneNumberId = process.env.VAPI_PHONE_NUMBER_ID?.trim();
-    const assistantId =
-      process.env.POC_ASSISTANT_ID?.trim() ||
-      process.env.VAPI_ASSISTANT_ID?.trim();
+    const dial = outboundDialConfig();
+    const { apiKey, phoneNumberId, assistantId } = dial;
+    const configured =
+      dial.mode === 'vapi'
+        ? Boolean(apiKey && phoneNumberId)
+        : Boolean(apiKey && phoneNumberId && assistantId);
 
-    if (!apiKey || !phoneNumberId || !assistantId) {
+    if (!apiKey || !phoneNumberId || !configured) {
       this.log.warn(
-        'Outbound dial skipped — set VAPI_API_KEY, VAPI_PHONE_NUMBER_ID, and POC_ASSISTANT_ID',
+        dial.mode === 'vapi'
+          ? 'Outbound dial skipped (mode=vapi) — set VAPI_NATIVE_API_KEY and VAPI_NATIVE_PHONE_NUMBER_ID'
+          : 'Outbound dial skipped — set VAPI_API_KEY, VAPI_PHONE_NUMBER_ID, and POC_ASSISTANT_ID',
       );
-      const message = outboundFailureInboundHint(fromNumberReadable);
+      const message = outboundFailureInboundHint(inboundNumberReadable());
       await this.leadMail.notifyOutboundCallFailed({
         companyName,
         contactName,
@@ -148,6 +200,30 @@ export class OutboundCallService {
       consentOutboundCall: true,
     };
 
+    const publicBase = (process.env.PUBLIC_BASE_URL ?? '').trim().replace(/\/$/, '');
+    // Inline assistant mirrors the saved outbound assistant's call behavior:
+    // speak first on pickup (model-generated), same voice / transcriber.
+    const assistant = assistantId
+      ? { assistantId }
+      : {
+          assistant: {
+            ...sampleTransientAssistant(publicBase),
+            server: { url: projectWebhookUrl(publicBase) },
+            firstMessageMode: 'assistant-speaks-first-with-model-generated-message',
+            voice: { provider: 'vapi', voiceId: 'Elliot' },
+            transcriber: {
+              provider: 'deepgram',
+              model: 'nova-3',
+              language: 'en',
+              confidenceThreshold: 0.4,
+            },
+            endCallMessage: 'Goodbye.',
+          },
+        };
+    this.log.log(
+      `Outbound dial mode=${dial.mode} assistant=${assistantId ?? 'inline'} to=${phone}`,
+    );
+
     try {
       const res = await fetch('https://api.vapi.ai/call', {
         method: 'POST',
@@ -156,7 +232,7 @@ export class OutboundCallService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          assistantId,
+          ...assistant,
           phoneNumberId,
           customer: {
             number: phone,
@@ -189,7 +265,7 @@ export class OutboundCallService {
           notes: input.notes,
           reason,
           fromNumberReadable,
-          inboundHint: outboundFailureInboundHint(fromNumberReadable),
+          inboundHint: outboundFailureInboundHint(inboundNumberReadable()),
         });
         return {
           ok: false,
@@ -197,7 +273,7 @@ export class OutboundCallService {
           normalizedPhone: phone,
           fromNumberReadable,
           error: reason,
-          message: outboundFailureInboundHint(fromNumberReadable),
+          message: outboundFailureInboundHint(inboundNumberReadable()),
         };
       }
 
@@ -215,7 +291,7 @@ export class OutboundCallService {
           reason: started.reason,
           callId: body.id,
           fromNumberReadable,
-          inboundHint: outboundFailureInboundHint(fromNumberReadable),
+          inboundHint: outboundFailureInboundHint(inboundNumberReadable()),
         });
         return {
           ok: false,
@@ -224,7 +300,7 @@ export class OutboundCallService {
           normalizedPhone: phone,
           fromNumberReadable,
           error: started.reason,
-          message: outboundFailureInboundHint(fromNumberReadable),
+          message: outboundFailureInboundHint(inboundNumberReadable()),
         };
       }
 
@@ -257,7 +333,7 @@ export class OutboundCallService {
         notes: input.notes,
         reason,
         fromNumberReadable,
-        inboundHint: outboundFailureInboundHint(fromNumberReadable),
+        inboundHint: outboundFailureInboundHint(inboundNumberReadable()),
       });
       return {
         ok: false,
@@ -265,7 +341,7 @@ export class OutboundCallService {
         normalizedPhone: phone,
         fromNumberReadable,
         error: reason,
-        message: outboundFailureInboundHint(fromNumberReadable),
+        message: outboundFailureInboundHint(inboundNumberReadable()),
       };
     }
   }

@@ -14,22 +14,27 @@ COPY --from=vapi-studio test ./test
 COPY --from=vapi-studio scripts ./scripts
 COPY --from=vapi-studio docs ./docs
 COPY --from=vapi-studio agent ./agent
-RUN yarn install && yarn build
+# Local framework build only when package.json pins file:… (make STUDIO_SOURCE=local);
+# otherwise the app installs @guidify-ai/vapi-studio from the npm registry.
+COPY package.json /tmp/app-package.json
 RUN mkdir -p /pkg/vapi-studio-pub \
-  && cp package.json /pkg/vapi-studio-pub/ \
-  && cp -R dist /pkg/vapi-studio-pub/dist \
-  && cp -R scripts /pkg/vapi-studio-pub/scripts \
-  && cp -R docs /pkg/vapi-studio-pub/docs \
-  && cp -R agent /pkg/vapi-studio-pub/agent
-RUN rm -rf node_modules
+  && if node -e "process.exit(/^file:/.test(require('/tmp/app-package.json').dependencies['@guidify-ai/vapi-studio']||'')?0:1)"; then \
+       yarn install && yarn build \
+       && cp package.json /pkg/vapi-studio-pub/ \
+       && cp -R dist scripts docs agent /pkg/vapi-studio-pub/ \
+       && rm -rf node_modules; \
+     fi
 
 WORKDIR /app
 COPY package.json tsconfig.json ./
 COPY src ./src
 COPY config ./config
 COPY test ./test
-RUN node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.dependencies['@guidify-ai/vapi-studio']='file:/pkg/vapi-studio-pub'; fs.writeFileSync('package.json', JSON.stringify(p,null,2));" \
-  && yarn install && yarn build
+RUN if [ -f /pkg/vapi-studio-pub/package.json ]; then \
+       node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.dependencies['@guidify-ai/vapi-studio']='file:/pkg/vapi-studio-pub'; fs.writeFileSync('package.json', JSON.stringify(p,null,2));"; \
+     fi \
+  && yarn install && yarn build \
+  && node -e "const p=JSON.parse(require('fs').readFileSync('node_modules/@guidify-ai/vapi-studio/package.json','utf8')); console.log('vapi-studio', p.version, require.resolve('@guidify-ai/vapi-studio'))"
 
 FROM node:24-bookworm-slim AS runtime
 WORKDIR /app

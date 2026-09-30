@@ -20,7 +20,7 @@ export const PLANNER_KNOWLEDGE_BASE: KnowledgeEntry[] = [
       'what is this',
     ],
     answer:
-      'Vapi Studio is an open-source toolkit for building deterministic voice agents on Vapi — the call path is a graph you control; the LLM is only used at listen boundaries. Guidify is the only official team.',
+      'Vapi Studio is an open-source toolkit for building deterministic voice agents on Vapi — the call path is a graph you control; the LLM is only used at listen boundaries. Guidify AI is the official Vapi Studio team.',
   },
   {
     id: 'deterministic',
@@ -47,7 +47,7 @@ export const PLANNER_KNOWLEDGE_BASE: KnowledgeEntry[] = [
       'docker',
     ],
     answer:
-      'Yes — Vapi Studio is free to self-host with BYOK (your OpenAI/Claude/Gemini/Grok, Vapi, Twilio, CRM). Running Vapi with Studio is cheaper than Vapi alone — about 500×–800× lower cost on some tools in our measurements. You run it in Docker; Guidify can still help build the first module if you want.',
+      'Yes — Vapi Studio is free to self-host with BYOK (your OpenAI/Claude/Gemini/Grok, Vapi, Twilio, CRM). Running Vapi with Studio is cheaper than Vapi alone — about 500×–800× lower cost on some tools in our measurements. You run it in Docker; Guidify AI can still help build the first module if you want.',
   },
   {
     id: 'pricing-hours',
@@ -62,7 +62,7 @@ export const PLANNER_KNOWLEDGE_BASE: KnowledgeEntry[] = [
       'expensive',
     ],
     answer:
-      'Studio itself is free to self-host (BYOK). Running Vapi with Studio is cheaper than Vapi alone — about 500×–800× lower cost on some tools in our measurements. We don’t quote Guidify build hours in this chat — use Help me build it for a scoped quote.',
+      'Studio itself is free to self-host (BYOK). Running Vapi with Studio is cheaper than Vapi alone — about 500×–800× lower cost on some tools in our measurements. We don’t quote Guidify AI build hours in this chat — use Help me build it for a scoped quote.',
   },
   {
     id: 'guidify-team',
@@ -76,7 +76,7 @@ export const PLANNER_KNOWLEDGE_BASE: KnowledgeEntry[] = [
       'analytics team',
     ],
     answer:
-      'Guidify is the only official Vapi Studio team. You can build yourself, or hire us for full-cycle work — Management, Development, and Analytics. Help me build it attaches your draft for follow-up.',
+      'Guidify AI is the official Vapi Studio team. You can build yourself, or hire us for full-cycle work — Management, Development, and Analytics. Help me build it attaches your draft for follow-up.',
   },
   {
     id: 'vapi-required',
@@ -144,7 +144,7 @@ export const PLANNER_KNOWLEDGE_BASE: KnowledgeEntry[] = [
       'show me a sample',
     ],
     answer:
-      "The sample call is a spoken-style preview of the agent we're designing for you — not production audio. Ask for changes anytime after it appears, or use Help me build it to have Guidify implement it.",
+      "The sample call is a spoken-style preview of the agent we're designing for you — not production audio. Ask for changes anytime after it appears, or use Help me build it to have Guidify AI implement it.",
   },
   {
     id: 'security-pii',
@@ -158,7 +158,7 @@ export const PLANNER_KNOWLEDGE_BASE: KnowledgeEntry[] = [
       'secure',
     ],
     answer:
-      "Design the agent so it never collects sensitive data you don't need. For regulated workloads, Guidify will scope controls with you — use Help me build it and we'll follow up on compliance details.",
+      "Design the agent so it never collects sensitive data you don't need. For regulated workloads, Guidify AI will scope controls with you — use Help me build it and we'll follow up on compliance details.",
   },
 ];
 

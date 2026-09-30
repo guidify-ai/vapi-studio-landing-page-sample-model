@@ -494,7 +494,7 @@ export const IntegrationsToolsIntention = integrationChoice(
   /\b(calendar|tool|twilio|zapier|integrat)\b/i,
 );
 
-/** True CTA to hire — not "how much does Guidify charge…" (product FAQ). */
+/** True CTA to hire — not "how much does Guidify AI charge…" (product FAQ). */
 function wantsHelpBuild(text: string): boolean {
   return /\b(help me build|hire (you|guidify)|get a quote|request a quote)\b/i.test(
     text,

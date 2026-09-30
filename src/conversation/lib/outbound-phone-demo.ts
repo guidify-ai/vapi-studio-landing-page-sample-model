@@ -1,4 +1,4 @@
-/** This sample never live-transfers — Guidify follows up offline. */
+/** This sample never live-transfers — Guidify AI follows up offline. */
 export function isOutboundPhoneDemo(_ctx?: unknown): boolean {
   return true;
 }

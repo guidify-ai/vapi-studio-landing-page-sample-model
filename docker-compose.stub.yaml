@@ -44,6 +44,9 @@ services:
       POC_COMPANY_NAME: ${POC_COMPANY_NAME:-Sample Studio}
       VAPI_TRANSFER_DESTINATION: ${VAPI_TRANSFER_DESTINATION:-+15551234567}
       VAPI_END_CALL_TOOL_NAME: ${VAPI_END_CALL_TOOL_NAME:-end_call_tool}
+      # One-ngrok: forward /:uuid/vapi/* → Roofr (set by platform make start)
+      PLATFORM_PROJECT_PROXY_URL: ${PLATFORM_PROJECT_PROXY_URL:-http://host.docker.internal:9999}
+      PLATFORM_PROJECT_PROXY_UUID: ${PLATFORM_PROJECT_PROXY_UUID:-c0ffee00-5e1d-4000-a000-00000000f00f}
       CONFIG_DIR: /app/config
     volumes:
       - ./logs:/app/logs

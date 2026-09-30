@@ -1,34 +1,166 @@
 version: 1
 flow:
   id: sample-landing-demo
-  start: acknowledge
+  start: greet
+  # Spec: config/demo-conversation.yml
 nodes:
-  acknowledge:
-    class: AcknowledgeNode
+  greet:
+    class: DemoGreetNode
     intentions:
-      - phone_demo_clarify
+      - entry_sales
+      - entry_docs
+      - entry_support
+      - entry_feature
+      - entry_exploring
+      - entry_clarify
       - studio.isGoodbye
-  topicWhat:
-    class: PhoneDemoWhatNode
+  clarifyEntry:
+    class: DemoClarifyEntryNode
     intentions:
-      - phone_demo_what
-  topicCost:
-    class: PhoneDemoCostNode
-    intentions:
-      - phone_demo_cost
-  topicNotDev:
-    class: PhoneDemoNotDevNode
-    intentions:
-      - phone_demo_not_dev
-  leadGen:
-    class: PhoneDemoLeadNode
-    intentions:
-      - phone_demo_use_case
+      - entry_sales
+      - entry_docs
+      - entry_support
+      - entry_feature
+      - entry_exploring
+      - entry_clarify
       - studio.isGoodbye
-  heardAbout:
-    class: PhoneDemoHeardAboutNode
+  # Project and exploring share this path; exploring only changes the business ask.
+  salesEntry:
+    class: DemoSalesEntryNode
     intentions:
-      - phone_demo_heard_about
+      - entry_sales
+  salesBusiness:
+    class: DemoSalesBusinessNode
+    intentions:
+      - sales_business
+      - optional_skip
+      - studio.isGoodbye
+  salesUseCase:
+    class: DemoSalesUseCaseNode
+    intentions:
+      - sales_use_case
+      - studio.isGoodbye
+  salesDiscovery:
+    class: DemoSalesDiscoveryNode
+    intentions:
+      - sales_discovery
+      - optional_skip
+      - studio.isGoodbye
+  salesConsent:
+    class: DemoSalesConsentNode
+    intentions:
+      - sales_consent_yes
+      - sales_consent_no
+      - studio.isGoodbye
+  salesNoContactEnd:
+    class: DemoSalesNoContactEndNode
+    terminal: true
+    intentions:
+      - studio.isGoodbye
+  supportEntry:
+    class: DemoSupportEntryNode
+    intentions:
+      - entry_support
+  supportIssue:
+    class: DemoSupportIssueNode
+    intentions:
+      - support_issue
+      - studio.isGoodbye
+  # Mails the issue report to the Studio team before the consent question.
+  supportDetail:
+    class: DemoSupportDetailNode
+    intentions:
+      - support_detail
+      - optional_skip
+      - studio.isGoodbye
+  supportConsent:
+    class: DemoSupportConsentNode
+    intentions:
+      - support_consent_yes
+      - support_consent_no
+      - studio.isGoodbye
+  supportNoContactEnd:
+    class: DemoSupportNoContactEndNode
+    terminal: true
+    intentions:
+      - studio.isGoodbye
+  featureEntry:
+    class: DemoFeatureEntryNode
+    intentions:
+      - entry_feature
+  featureDescription:
+    class: DemoFeatureDescriptionNode
+    intentions:
+      - feature_description
+      - studio.isGoodbye
+  featureConsent:
+    class: DemoFeatureConsentNode
+    intentions:
+      - feature_consent_yes
+      - feature_consent_no
+      - studio.isGoodbye
+  featureNoContactEnd:
+    class: DemoFeatureNoContactEndNode
+    terminal: true
+    intentions:
+      - studio.isGoodbye
+  # Answers from the public GitHub repos (docs advisor), loops for more questions.
+  docsAnswer:
+    class: DemoDocsAnswerNode
+    intentions:
+      - entry_docs
+      - docs_question
+      - studio.isGoodbye
+  docsEnd:
+    class: DemoDocsEndNode
+    terminal: true
+    intentions:
+      - docs_done
+      - studio.isGoodbye
+  contactMethod:
+    class: DemoContactMethodNode
+    # Reach only via continueTo after consent is granted on sales/support/…
+    intentions:
+      - contact_prefer_email
+      - contact_prefer_call
+      - contact_email_collect
+      - studio.isGoodbye
+  callerPhoneConsent:
+    class: DemoCallerPhoneConsentNode
+    intentions:
+      - phone_reuse_yes
+      - phone_reuse_no
+      - studio.isGoodbye
+  requestPhone:
+    class: DemoRequestPhoneNode
+    intentions:
+      - contact_phone
+      - studio.isGoodbye
+  emitOutcome:
+    class: DemoEmitOutcomeNode
+    # Reach only via continueTo from contactMethod / requestPhone / callerPhoneConsent.
+    # Do NOT list contact_phone here — nodesForIntention sorts by id and would
+    # pick emitOutcome over requestPhone, skipping parse/retry.
+    intentions: []
+  salesSuccessEnd:
+    class: DemoSalesSuccessEndNode
+    terminal: true
+    intentions:
+      - studio.isGoodbye
+  supportSuccessEnd:
+    class: DemoSupportSuccessEndNode
+    terminal: true
+    intentions:
+      - studio.isGoodbye
+  featureSuccessEnd:
+    class: DemoFeatureSuccessEndNode
+    terminal: true
+    intentions:
+      - studio.isGoodbye
+  contactFailureEnd:
+    class: DemoContactFailureEndNode
+    terminal: true
+    intentions:
       - studio.isGoodbye
   farewell:
     class: GoodbyeNode

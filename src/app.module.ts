@@ -31,6 +31,7 @@ import { StudioController } from './studio/studio.controller';
 import { StudioSessionService } from './studio/studio-session.service';
 import { StudioEventBuffer } from './studio/studio-event-buffer';
 import { StudioLiveSpeechBuffer } from './studio/studio-live-speech.buffer';
+import { RecaptchaService } from './studio/recaptcha.service';
 import { FormResumeService } from './forms/form-resume.service';
 import { CallerPersistenceModule } from './caller/caller-persistence.module';
 import { CallerProfileEntity } from './caller/caller-profile.entity';
@@ -46,19 +47,61 @@ import { UserInterruptedStrategy } from './vapi/strategies/user-interrupted.stra
 import { ToolCallsStrategy } from './vapi/strategies/tool-calls.strategy';
 import { PlannerConversationEntry } from './conversation/entry';
 import {
-  AcknowledgeNode,
-  PhoneDemoLeadNode,
-  PhoneDemoHeardAboutNode,
-  PhoneDemoWhatNode,
-  PhoneDemoCostNode,
-  PhoneDemoNotDevNode,
-  PhoneDemoWhatIntention,
-  PhoneDemoCostIntention,
-  PhoneDemoNotDevIntention,
-  PhoneDemoClarifyIntention,
-  PhoneDemoUseCaseIntention,
-  PhoneDemoHeardAboutIntention,
-} from './conversation/nodes/planner/phone-demo.nodes';
+  DemoGreetNode,
+  DemoClarifyEntryNode,
+  DemoSalesEntryNode,
+  DemoSalesBusinessNode,
+  DemoSalesUseCaseNode,
+  DemoSalesDiscoveryNode,
+  DemoSalesConsentNode,
+  DemoSalesNoContactEndNode,
+  DemoSupportEntryNode,
+  DemoSupportIssueNode,
+  DemoSupportDetailNode,
+  DemoSupportConsentNode,
+  DemoSupportNoContactEndNode,
+  DemoFeatureEntryNode,
+  DemoFeatureDescriptionNode,
+  DemoFeatureConsentNode,
+  DemoFeatureNoContactEndNode,
+  DemoDocsAnswerNode,
+  DemoDocsEndNode,
+  DemoContactMethodNode,
+  DemoCallerPhoneConsentNode,
+  DemoRequestPhoneNode,
+  DemoEmitOutcomeNode,
+  DemoSalesSuccessEndNode,
+  DemoSupportSuccessEndNode,
+  DemoFeatureSuccessEndNode,
+  DemoContactFailureEndNode,
+  EntrySalesIntention,
+  EntryDocsIntention,
+  EntrySupportIntention,
+  EntryFeatureIntention,
+  EntryExploringIntention,
+  EntryClarifyIntention,
+  SalesBusinessIntention,
+  SalesUseCaseIntention,
+  SalesDiscoveryIntention,
+  SalesConsentYesIntention,
+  SalesConsentNoIntention,
+  DocsQuestionIntention,
+  DocsDoneIntention,
+  SupportIssueIntention,
+  SupportDetailIntention,
+  SupportConsentYesIntention,
+  SupportConsentNoIntention,
+  FeatureDescriptionIntention,
+  FeatureConsentYesIntention,
+  FeatureConsentNoIntention,
+  PhoneReuseYesIntention,
+  PhoneReuseNoIntention,
+  ContactPhoneIntention,
+  ContactPreferEmailIntention,
+  ContactPreferCallIntention,
+  ContactEmailCollectIntention,
+  OptionalSkipIntention,
+} from './conversation/nodes/planner/demo-conversation.nodes';
 import {
   GoodbyeNode,
   ContinueNode,
@@ -75,6 +118,7 @@ import {
 } from './conversation/intentions/planner.intentions';
 import { brainConfig } from './brain/brain.config';
 import { PlannerMailModule } from './mail/planner-mail.module';
+import { AdvisorModule } from './advisor/advisor.module';
 import { OutboundCallService } from './studio/outbound-call.service';
 
 function resolveBrainAdapter() {
@@ -103,6 +147,7 @@ function resolveBrainAdapter() {
 @Module({
   imports: [
     PlannerMailModule,
+    AdvisorModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
       url:
@@ -131,22 +176,97 @@ function resolveBrainAdapter() {
         GibberishDetectIntention,
         SoftContinueIntention,
         NothingElseIntention,
-        PhoneDemoWhatIntention,
-        PhoneDemoCostIntention,
-        PhoneDemoNotDevIntention,
-        PhoneDemoClarifyIntention,
-        PhoneDemoUseCaseIntention,
-        PhoneDemoHeardAboutIntention,
+        EntrySalesIntention,
+        EntryDocsIntention,
+        EntrySupportIntention,
+        EntryFeatureIntention,
+        EntryExploringIntention,
+        EntryClarifyIntention,
+        SalesBusinessIntention,
+        SalesUseCaseIntention,
+        SalesDiscoveryIntention,
+        SalesConsentYesIntention,
+        SalesConsentNoIntention,
+        DocsQuestionIntention,
+        DocsDoneIntention,
+        SupportIssueIntention,
+        SupportDetailIntention,
+        SupportConsentYesIntention,
+        SupportConsentNoIntention,
+        FeatureDescriptionIntention,
+        FeatureConsentYesIntention,
+        FeatureConsentNoIntention,
+        PhoneReuseYesIntention,
+        PhoneReuseNoIntention,
+        ContactPhoneIntention,
+        ContactPreferEmailIntention,
+        ContactPreferCallIntention,
+        ContactEmailCollectIntention,
+        OptionalSkipIntention,
       ],
       nodes: [
-        { className: 'AcknowledgeNode', useClass: AcknowledgeNode },
-        { className: 'PhoneDemoWhatNode', useClass: PhoneDemoWhatNode },
-        { className: 'PhoneDemoCostNode', useClass: PhoneDemoCostNode },
-        { className: 'PhoneDemoNotDevNode', useClass: PhoneDemoNotDevNode },
-        { className: 'PhoneDemoLeadNode', useClass: PhoneDemoLeadNode },
+        { className: 'DemoGreetNode', useClass: DemoGreetNode },
+        { className: 'DemoClarifyEntryNode', useClass: DemoClarifyEntryNode },
+        { className: 'DemoSalesEntryNode', useClass: DemoSalesEntryNode },
+        { className: 'DemoSalesBusinessNode', useClass: DemoSalesBusinessNode },
+        { className: 'DemoSalesUseCaseNode', useClass: DemoSalesUseCaseNode },
         {
-          className: 'PhoneDemoHeardAboutNode',
-          useClass: PhoneDemoHeardAboutNode,
+          className: 'DemoSalesDiscoveryNode',
+          useClass: DemoSalesDiscoveryNode,
+        },
+        { className: 'DemoSalesConsentNode', useClass: DemoSalesConsentNode },
+        {
+          className: 'DemoSalesNoContactEndNode',
+          useClass: DemoSalesNoContactEndNode,
+        },
+        { className: 'DemoSupportEntryNode', useClass: DemoSupportEntryNode },
+        { className: 'DemoSupportIssueNode', useClass: DemoSupportIssueNode },
+        { className: 'DemoSupportDetailNode', useClass: DemoSupportDetailNode },
+        {
+          className: 'DemoSupportConsentNode',
+          useClass: DemoSupportConsentNode,
+        },
+        {
+          className: 'DemoSupportNoContactEndNode',
+          useClass: DemoSupportNoContactEndNode,
+        },
+        { className: 'DemoFeatureEntryNode', useClass: DemoFeatureEntryNode },
+        {
+          className: 'DemoFeatureDescriptionNode',
+          useClass: DemoFeatureDescriptionNode,
+        },
+        {
+          className: 'DemoFeatureConsentNode',
+          useClass: DemoFeatureConsentNode,
+        },
+        {
+          className: 'DemoFeatureNoContactEndNode',
+          useClass: DemoFeatureNoContactEndNode,
+        },
+        { className: 'DemoDocsAnswerNode', useClass: DemoDocsAnswerNode },
+        { className: 'DemoDocsEndNode', useClass: DemoDocsEndNode },
+        { className: 'DemoContactMethodNode', useClass: DemoContactMethodNode },
+        {
+          className: 'DemoCallerPhoneConsentNode',
+          useClass: DemoCallerPhoneConsentNode,
+        },
+        { className: 'DemoRequestPhoneNode', useClass: DemoRequestPhoneNode },
+        { className: 'DemoEmitOutcomeNode', useClass: DemoEmitOutcomeNode },
+        {
+          className: 'DemoSalesSuccessEndNode',
+          useClass: DemoSalesSuccessEndNode,
+        },
+        {
+          className: 'DemoSupportSuccessEndNode',
+          useClass: DemoSupportSuccessEndNode,
+        },
+        {
+          className: 'DemoFeatureSuccessEndNode',
+          useClass: DemoFeatureSuccessEndNode,
+        },
+        {
+          className: 'DemoContactFailureEndNode',
+          useClass: DemoContactFailureEndNode,
         },
         { className: 'GoodbyeNode', useClass: GoodbyeNode },
         { className: 'ContinueNode', useClass: ContinueNode },
@@ -171,6 +291,7 @@ function resolveBrainAdapter() {
     StudioLiveSpeechBuffer,
     StudioSessionService,
     OutboundCallService,
+    RecaptchaService,
     FormResumeService,
     ProjectSeedService,
     VapiWebhookGuard,
@@ -212,7 +333,7 @@ export class AppModule implements OnModuleInit {
     } else {
       this.flowLoader.loadFromFile(join(configDir, 'flow.yaml'));
       this.logger.log(
-        'Planner sample: config/flow.yaml (Landing Page Planner LLM)',
+        'Landing demo: config/flow.yaml (config/demo-conversation.yml)',
       );
     }
 
