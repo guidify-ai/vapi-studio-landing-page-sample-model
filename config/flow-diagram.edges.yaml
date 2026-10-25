@@ -1,27 +1,96 @@
-# Visual edges for /flow — mounted demo graph only.
+# Visual edges for /flow — landing demo (config/demo-conversation.yml).
 hide: []
 edges:
-  - from: acknowledge
-    to: topicWhat
-    label: what can you do
-  - from: acknowledge
-    to: topicCost
-    label: how much
-  - from: acknowledge
-    to: topicNotDev
-    label: not a developer
-  - from: topicWhat
-    to: leadGen
-    label: ask use case
-  - from: topicCost
-    to: leadGen
-    label: ask use case
-  - from: topicNotDev
-    to: leadGen
-    label: ask use case
-  - from: leadGen
-    to: heardAbout
+  - from: greet
+    to: clarifyEntry
+    label: unclear
+  - from: greet
+    to: salesEntry
+    label: project / exploring
+  - from: greet
+    to: docsAnswer
+    label: docs question
+  - from: greet
+    to: supportEntry
+    label: issue
+  - from: greet
+    to: featureEntry
+    label: feature
+  - from: salesEntry
+    to: salesBusiness
+    label: ask business
+  - from: salesBusiness
+    to: salesUseCase
+    label: offer 2–3 scenarios
+  - from: salesUseCase
+    to: salesDiscovery
     label: how heard
-  - from: heardAbout
-    to: farewell
-    label: farewell
+  - from: salesDiscovery
+    to: salesConsent
+    label: contact consent
+  - from: salesConsent
+    to: contactMethod
+    label: yes
+  - from: salesConsent
+    to: salesNoContactEnd
+    label: no
+  - from: supportEntry
+    to: supportIssue
+    label: ask issue
+  - from: supportEntry
+    to: supportDetail
+    label: issue known
+  - from: supportIssue
+    to: supportDetail
+    label: ask details
+  - from: supportDetail
+    to: supportConsent
+    label: report mailed
+  - from: supportConsent
+    to: contactMethod
+    label: yes
+  - from: supportConsent
+    to: supportNoContactEnd
+    label: no
+  - from: docsAnswer
+    to: docsEnd
+    label: done
+  - from: docsAnswer
+    to: supportEntry
+    label: issue
+  - from: featureEntry
+    to: featureDescription
+    label: ask feature
+  - from: featureDescription
+    to: featureConsent
+    label: contact consent
+  - from: featureConsent
+    to: contactMethod
+    label: yes
+  - from: featureConsent
+    to: featureNoContactEnd
+    label: no
+  - from: contactMethod
+    to: callerPhoneConsent
+    label: have caller #
+  - from: contactMethod
+    to: requestPhone
+    label: ask phone
+  - from: contactMethod
+    to: emitOutcome
+    label: email on file
+  - from: callerPhoneConsent
+    to: emitOutcome
+    label: reuse yes
+  - from: requestPhone
+    to: emitOutcome
+    label: phone ok
+  - from: emitOutcome
+    to: salesSuccessEnd
+    label: sales lead
+  - from: emitOutcome
+    to: supportSuccessEnd
+    label: support
+  - from: emitOutcome
+    to: featureSuccessEnd
+    label: feature

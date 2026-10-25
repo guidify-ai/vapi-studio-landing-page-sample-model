@@ -1,0 +1,1348 @@
+version: "1.1"
+
+demo:
+  id: "vapi_studio_landing_demo"
+  name: "Vapi Studio Landing Page Voice Demo"
+
+  purpose: >
+    Demonstrate a tiny, useful, human-first voice conversation powered by
+    Vapi Studio. The caller should be able to speak naturally while Studio
+    keeps the business flow controlled and deterministic.
+
+  primary_outcomes:
+    - Create a sales/use-case lead when the caller wants to discuss using Vapi Studio.
+    - Create a support request when the caller has a problem with Vapi Studio.
+    - Create a feature request when the caller suggests a capability or improvement.
+    - Let an explorer try the same project path on any business (or "you pick") without forcing a business outcome.
+    - Answer Studio questions from the public GitHub repos, and email issue reports to the Studio team.
+
+  demo_goals:
+    - Demonstrate natural intention detection from open speech.
+    - Demonstrate that callers do not need to say exact option wording.
+    - Demonstrate open-ended extraction.
+    - Demonstrate extraction of multiple facts from one utterance.
+    - Demonstrate contextual memory and skipping already-known questions.
+    - Demonstrate deterministic routing after natural-language understanding.
+    - Demonstrate short clarification when intent is ambiguous.
+    - Demonstrate explicit, purpose-specific consent before contact.
+    - Demonstrate that the assistant can use the caller's phone number only with permission.
+    - Collect how the caller heard about Vapi Studio when appropriate.
+
+  target_duration:
+    ideal_seconds: 30
+    acceptable_seconds: 60
+    hard_target_seconds: 90
+
+    design_principles:
+    - "Human-first: the caller speaks naturally; the system adapts."
+    - "The caller must never feel like they are filling out a form."
+    - "Never force exact option wording."
+    - "Never ask for information already provided."
+    - "Ask one conceptual question at a time."
+    - "Keep assistant turns short."
+    - "Every spoken assistant turn must end with a clear CTA (question or next action)."
+    - "Never speak a bare acknowledgement (e.g. 'Got it.') without a CTA in the same turn."
+    - "Do not offer a support/broke path unless the caller shows evidence of a problem."
+    - "Accept interruptions, corrections, partial answers, and multi-answer utterances."
+    - "Do not collect details that are not needed for the outcome."
+    - "Do not over-qualify sales leads."
+    - "Do not turn support into a troubleshooting questionnaire."
+    - "Do not turn feature requests into product interviews."
+    - "Contact requires explicit consent tied to a clear purpose."
+    - "A refusal immediately ends the contact path."
+    - "The caller may exit at any time."
+    - "Do not expose nodes, intents, schemas, extractors, routing, or other internal concepts."
+
+  tone:
+    personality:
+      - friendly
+      - concise
+      - calm
+      - competent
+      - human
+    avoid:
+      - corporate_sales_voice
+      - excessive_enthusiasm
+      - technical_jargon_unless_caller_uses_it
+      - robotic_option_lists
+      - unnecessary_confirmation
+      - fake_empathy
+      - pretending_to_have_solved_a_problem
+    speech:
+      sentences: short
+      contractions: true
+      humour: light_and_optional
+      maximum_spoken_choices: 3
+
+# =============================================================================
+# DATA MODEL
+# =============================================================================
+
+data:
+
+  primary_intent:
+    type: enum
+    values:
+      - sales_or_use_case
+      - docs_question
+      - support
+      - feature_request
+      - exploring
+      - unknown
+    initial: unknown
+
+  business_description:
+    type: string
+    nullable: true
+    description: >
+      Short caller-provided description of their business, product, organization,
+      or project. Prefer the caller's wording. This is optional.
+
+  use_case:
+    type: string
+    nullable: true
+    description: >
+      Short natural-language description of what the caller wants to accomplish
+      with Vapi/Vapi Studio.
+
+  scenario_options:
+    type: list
+    nullable: true
+    description: >
+      The 2–3 caller-assistant scenarios offered for the business (scenario
+      advisor: one small LLM call, vertical heuristics offline).
+
+  docs_question:
+    type: string
+    nullable: true
+    description: >
+      The visitor's question about Studio or its docs, answered from the public
+      GitHub repos guidify-ai/vapi-studio and guidify-ai/vapi-studio-project.
+
+  support_issue:
+    type: string
+    nullable: true
+    description: >
+      Caller-provided description of the problem they are experiencing.
+      Preserve useful technical details.
+
+  support_detail:
+    type: string
+    nullable: true
+    description: >
+      One follow-up on the issue: steps, error message, or Studio version.
+
+  feature_description:
+    type: string
+    nullable: true
+    description: >
+      Caller-provided feature idea or requested improvement.
+
+  discovery_source:
+    type: string
+    nullable: true
+    description: >
+      How the caller heard about Vapi Studio. Keep useful open wording rather
+      than forcing it into an enum.
+
+  contact_consent:
+    type: enum
+    values:
+      - granted
+      - declined
+      - unknown
+    initial: unknown
+
+  contact_purpose:
+    type: enum
+    values:
+      - sales_discussion
+      - support_help
+      - feature_discussion
+      - none
+    initial: none
+
+  caller_phone_reuse_consent:
+    type: enum
+    values:
+      - granted
+      - declined
+      - unknown
+      - unavailable
+    initial: unknown
+
+  caller_phone:
+    type: string
+    nullable: true
+    source: telephony_context
+
+  contact_phone:
+    type: string
+    nullable: true
+
+  outcome:
+    type: enum
+    values:
+      - none
+      - sales_lead
+      - support_request
+      - feature_request
+      - docs_answered
+      - demo_completed
+    initial: none
+
+# =============================================================================
+# GLOBAL UNDERSTANDING
+# =============================================================================
+
+understanding:
+
+  intention_scanning:
+    rule: >
+      Intents are meanings, not keywords. Rank only intents that are valid for
+      the current state. Use the current utterance plus relevant conversation
+      state. UNKNOWN must always be possible.
+
+    entry_examples:
+
+      sales_or_use_case:
+        - "We're looking at Studio for our dental office."
+        - "I want to build something with Vapi."
+        - "We're already using Vapi and need more control."
+        - "Could this work for a call center?"
+        - "I want to talk to somebody about using this."
+        - "We're evaluating this for our company."
+
+      docs_question:
+        - "I need help."
+        - "I have a question about Vapi Studio."
+        - "Where are the docs?"
+        - "How do I add a tool to a node?"
+        - "How do I start a new project?"
+
+      support:
+        - "My decision tree stops after the extractor."
+        - "Studio isn't working for me."
+        - "I think I found a bug."
+        - "My flow keeps going to the wrong node."
+
+      feature_request:
+        - "I have a feature request."
+        - "You should support parallel extractors."
+        - "Can you add conditional webhooks?"
+        - "It would be nice if Studio could do this."
+        - "I have an idea for Studio."
+
+      exploring:
+        - "I'm just trying the demo."
+        - "Just looking around."
+        - "I'm curious."
+        - "Nothing, I clicked the demo."
+        - "I don't have a project."
+
+  multi_fact_extraction:
+    enabled: true
+    rule: >
+      Every meaningful caller turn may answer current and future questions.
+      Extract all confidently supported fields immediately. Never ask again
+      for a field that is already known.
+
+    examples:
+
+      - caller: >
+          We run a dental clinic and want Vapi to handle appointment booking.
+          I found Studio on GitHub.
+        extract:
+          primary_intent: sales_or_use_case
+          business_description: "dental clinic"
+          use_case: "appointment booking"
+          discovery_source: "GitHub"
+
+      - caller: >
+          My decision tree crashes after a tool call and I found you through LinkedIn.
+        extract:
+          primary_intent: support
+          support_issue: "decision tree crashes after a tool call"
+          discovery_source: "LinkedIn"
+
+      - caller: >
+          You should add a way to run two extractors in parallel.
+        extract:
+          primary_intent: feature_request
+          feature_description: "run two extractors in parallel"
+
+  skip_known_information:
+    enabled: true
+    rule: >
+      Before asking a question, check whether its information is already known.
+      If yes, skip it.
+
+  corrections:
+    rule: >
+      The caller's latest explicit correction overrides earlier extracted data.
+
+  interruption_handling:
+    enabled: true
+    rule: >
+      Accept interruption naturally. Process the caller's complete utterance,
+      update state, and continue from the best next state. Never restart a
+      question merely because the caller interrupted it.
+
+  clarification:
+    maximum_attempts_per_topic: 1
+    rule: >
+      Clarify only when routing or consent genuinely requires it. Optional data
+      must never trap the caller in clarification loops.
+
+  optional_information:
+    rule: >
+      If the caller refuses optional information, acknowledge briefly and move on.
+
+# =============================================================================
+# GLOBAL ROUTES
+# =============================================================================
+
+global_routes:
+
+  exit:
+    examples:
+      - "stop"
+      - "I'm done"
+      - "that's enough"
+      - "bye"
+      - "end the demo"
+    action:
+      say: "No problem. Thanks for trying Vapi Studio!"
+      goto: end
+
+  explain_demo:
+    examples:
+      - "What am I supposed to do?"
+      - "How does this work?"
+      - "What is this?"
+    action:
+      say: >
+        Just talk to me normally. Tell me why you're here, and I'll take it from there.
+      resume_previous_state: true
+
+  contact_consent_withdrawal:
+    examples:
+      - "Actually don't contact me."
+      - "Never mind, don't call."
+      - "I changed my mind."
+    when: "contact_consent == granted"
+    action:
+      set:
+        contact_consent: declined
+        contact_phone: null
+      cancel_pending_contact_action: true
+      say: "No problem. I won't create a contact request."
+      goto: end_without_contact
+
+  early_contact_request:
+    examples:
+      - "Just have someone call me."
+      - "Can somebody contact me?"
+      - "I want to talk to your team."
+    rule: >
+      If the contact purpose is clear from context, treat this as explicit
+      consent for that purpose and proceed to contact method. If the purpose
+      is unclear, ask what they want to discuss before collecting contact data.
+
+# =============================================================================
+# ENTRY
+# =============================================================================
+
+flow:
+
+  start:
+    type: message
+    say: >
+      Hi! Most voice bots just free-chat. This one won't — you talk normally,
+      and I still stay on a clear path. Under a minute.
+      Are you here about a project, a question about Studio or its docs,
+      or just exploring?
+    rule: >
+      The greeting never offers "report an issue" out loud. Issues and feature
+      ideas are still recognised when the caller volunteers them.
+    next: scan_entry_intent
+
+  scan_entry_intent:
+    type: intention
+    target: primary_intent
+
+    routes:
+      sales_or_use_case:
+        goto: sales_entry
+      exploring:
+        goto: sales_entry
+      docs_question:
+        goto: docs_answer
+      support:
+        goto: support_entry
+      feature_request:
+        goto: feature_entry
+      unknown:
+        goto: clarify_entry
+
+  clarify_entry:
+    type: clarification
+    say: >
+      Tell me in a line — a project you have in mind, a question about Studio
+      or its docs, or are you just exploring?
+
+    routes:
+      sales_or_use_case:
+        goto: sales_entry
+      exploring:
+        goto: sales_entry
+      docs_question:
+        goto: docs_answer
+      support:
+        goto: support_entry
+      feature_request:
+        goto: feature_entry
+      unknown:
+        goto: sales_entry
+        set:
+          primary_intent: exploring
+
+# =============================================================================
+# PROJECT / EXPLORING BRANCH
+# Exploring is the same path; only the business ask differs.
+# =============================================================================
+
+  sales_entry:
+    type: decision
+    set:
+      contact_purpose: sales_discussion
+
+    next:
+      if:
+        - condition: "business_description == null"
+          goto: sales_business
+        - condition: "use_case == null"
+          goto: sales_use_case
+        - else:
+          goto: sales_acknowledge
+
+  sales_business:
+    type: extraction
+    target: business_description
+    optional: true
+
+    say: >
+      Nice. What kind of business is it? A couple of words is enough.
+
+    say_when_exploring: >
+      Let's try it on a business. Name one in a couple of words, real or made
+      up — like a pizza shop or a dentist — or say "you pick".
+
+    fallback:
+      value: "pizza shop"
+      when: caller says "you pick", or skips while exploring
+
+    on_value:
+      goto: sales_use_case
+
+    on_refusal:
+      goto: sales_use_case
+
+  sales_use_case:
+    type: hybrid_choice_and_open_input
+    target: use_case
+    skip_if: "use_case != null"
+
+    generated_options: >
+      Scenario advisor suggests exactly 3 things a Studio phone assistant could
+      do for that business's callers (lowercase verb phrases). Falls back to
+      vertical heuristics without an API key or on a bad reply.
+
+    say: >
+      A Studio phone assistant for {business} could {option 1}, {option 2},
+      or {option 3}. Which one fits best — or is it something else?
+
+    accepts:
+      - 'ordinals: "the second one", "first", "last"'
+      - 'a keyword from an option: "orders"'
+      - '"all of them" or "both"'
+      - "the caller's own goal, kept verbatim"
+
+    next: sales_acknowledge
+
+  sales_acknowledge:
+    type: generated_acknowledgement
+    instruction: >
+      Acknowledge the use case in one short sentence. Do not start consulting,
+      feature pitching, or collecting detailed business requirements.
+
+    examples:
+      - "Got it."
+      - "Makes sense."
+      - "Yep, that's a good fit for a controlled voice flow."
+
+    next: maybe_collect_discovery_source_sales
+
+  maybe_collect_discovery_source_sales:
+    type: decision
+    next:
+      if:
+        - condition: "discovery_source != null"
+          goto: sales_contact_consent
+        - else:
+          goto: sales_discovery_source
+
+  sales_discovery_source:
+    type: extraction
+    target: discovery_source
+    optional: true
+    say: "One quick question — how did you hear about Vapi Studio?"
+    next: sales_contact_consent
+
+  sales_contact_consent:
+    type: consent
+    target: contact_consent
+
+    say: >
+      Would you like someone from the Vapi Studio team to contact you to discuss it further?
+
+    positive_examples:
+      - "Yes."
+      - "Sure."
+      - "Absolutely."
+      - "Have someone call me."
+      - "That would be useful."
+
+    negative_examples:
+      - "No."
+      - "No thanks."
+      - "Not right now."
+      - "I'm good."
+
+    routes:
+      granted:
+        set:
+          outcome: sales_lead
+        goto: contact_method
+      declined:
+        goto: sales_no_contact_end
+      ambiguous:
+        goto: sales_consent_clarifier
+
+  sales_consent_clarifier:
+    type: consent
+    target: contact_consent
+    say: "No pressure — should our team contact you about this, yes or no?"
+    routes:
+      granted:
+        set:
+          outcome: sales_lead
+        goto: contact_method
+      declined:
+        goto: sales_no_contact_end
+      unresolved:
+        set:
+          contact_consent: declined
+        goto: sales_no_contact_end
+
+  sales_no_contact_end:
+    type: terminal
+    set:
+      outcome: demo_completed
+    say: "No problem. Thanks for trying Vapi Studio!"
+    actions:
+      - persist_demo_analytics
+    goto: end
+
+# =============================================================================
+# SUPPORT BRANCH
+# =============================================================================
+
+  support_entry:
+    type: decision
+    set:
+      contact_purpose: support_help
+
+    next:
+      if:
+        - condition: "support_issue != null"
+          goto: support_detail
+        - else:
+          goto: support_issue
+
+  support_issue:
+    type: extraction
+    target: support_issue
+
+    say: "Sorry about that — what's going wrong?"
+
+    instruction: >
+      Preserve the caller's actual problem and useful technical terms.
+      Do not unnecessarily summarize away node names, component names,
+      errors, or described behavior.
+
+    examples:
+      - "The flow stops after my extractor."
+      - "The decision tree keeps choosing the wrong route."
+      - "I can't get my Vapi tool call into Studio."
+      - "The portal isn't showing the extracted data."
+      - "My assistant loops after a clarification."
+
+    next: support_detail
+
+  support_detail:
+    type: extraction
+    target: support_detail
+    optional: true
+    say: >
+      Got it. What were you doing when it happened? An error message or your
+      Studio version helps too.
+    actions:
+      - email_issue_report
+    rule: >
+      The issue report is emailed to the Studio team (ISSUE_REPORT_TO) right
+      after this answer — before asking about follow-up — so it is never lost
+      if the caller hangs up.
+    next: support_contact_consent
+
+  support_acknowledge:
+    type: generated_acknowledgement
+
+    instruction: >
+      Reflect the problem in one short sentence when useful.
+      Do not claim to know the cause. Do not pretend the issue has been solved.
+      Do not launch into troubleshooting during this landing-page demo.
+
+    examples:
+      - caller: "The flow stops after the extractor."
+        response: "Got it — the flow stops after the extractor."
+      - caller: "The decision tree keeps choosing the wrong route."
+        response: "Okay, I understand the routing problem."
+      - caller: "Studio just doesn't work."
+        response: "Got it."
+
+    next: maybe_collect_discovery_source_support
+
+  maybe_collect_discovery_source_support:
+    type: decision
+    next:
+      if:
+        - condition: "discovery_source != null"
+          goto: support_contact_consent
+        - else:
+          goto: support_contact_consent
+
+    note: >
+      Do not ask attribution during support. The caller has a problem and
+      should reach the useful outcome as quickly as possible.
+
+  support_contact_consent:
+    type: consent
+    target: contact_consent
+
+    say: "Thanks — I've sent that to the Vapi Studio team. Want them to get back to you about it?"
+
+    routes:
+      granted:
+        set:
+          outcome: support_request
+        goto: contact_method
+      declined:
+        goto: support_no_contact_end
+      ambiguous:
+        goto: support_consent_clarifier
+
+  support_consent_clarifier:
+    type: consent
+    target: contact_consent
+    say: "Should our team contact you about this issue?"
+    routes:
+      granted:
+        set:
+          outcome: support_request
+        goto: contact_method
+      declined:
+        goto: support_no_contact_end
+      unresolved:
+        set:
+          contact_consent: declined
+        goto: support_no_contact_end
+
+  support_no_contact_end:
+    type: terminal
+    set:
+      outcome: demo_completed
+    say: "No problem — the team has your report. Thanks for flagging it!"
+    actions:
+      - persist_demo_analytics
+    goto: end
+
+# =============================================================================
+# FEATURE REQUEST BRANCH
+# =============================================================================
+
+  feature_entry:
+    type: decision
+    set:
+      contact_purpose: feature_discussion
+
+    next:
+      if:
+        - condition: "feature_description != null"
+          goto: feature_acknowledge
+        - else:
+          goto: feature_description
+
+  feature_description:
+    type: extraction
+    target: feature_description
+
+    say: "Sure. What would you like Studio to do?"
+
+    examples:
+      - "Run two extractors in parallel."
+      - "Support conditional webhooks."
+      - "Let me reuse a subtree."
+      - "I want to compare two intentions before routing."
+      - "Add HubSpot integration."
+
+    next: feature_acknowledge
+
+  feature_acknowledge:
+    type: generated_acknowledgement
+
+    instruction: >
+      Reflect the feature request in one short sentence. Never promise that
+      the feature will be implemented, accepted, scheduled, or prioritized.
+
+    examples:
+      - caller: "I want two extractors to run in parallel."
+        response: "Got it — parallel extractors."
+      - caller: "Add HubSpot integration."
+        response: "Got it — a HubSpot integration."
+
+    next: feature_contact_consent
+
+  feature_contact_consent:
+    type: consent
+    target: contact_consent
+
+    say: >
+      Would you like us to contact you if we want to discuss that idea?
+
+    routes:
+      granted:
+        set:
+          outcome: feature_request
+        goto: contact_method
+      declined:
+        goto: feature_no_contact_end
+      ambiguous:
+        goto: feature_consent_clarifier
+
+  feature_consent_clarifier:
+    type: consent
+    target: contact_consent
+    say: "Should we contact you if we'd like to discuss the feature?"
+    routes:
+      granted:
+        set:
+          outcome: feature_request
+        goto: contact_method
+      declined:
+        goto: feature_no_contact_end
+      unresolved:
+        set:
+          contact_consent: declined
+        goto: feature_no_contact_end
+
+  feature_no_contact_end:
+    type: terminal
+    set:
+      outcome: feature_request
+    say: "Got it. Thanks for the suggestion!"
+    actions:
+      - emit_feature_event_without_contact
+      - persist_demo_analytics
+    goto: end
+
+# =============================================================================
+# DOCS QUESTION BRANCH
+# =============================================================================
+
+  docs_answer:
+    type: generated_answer
+    target: docs_question
+
+    say_when_no_question: "Sure — what's your question about Studio?"
+
+    before_answer: "Let me check the Studio docs."
+
+    source: >
+      Docs advisor (LLM with a read_file tool) browses the public GitHub repos:
+      guidify-ai/vapi-studio for how the framework works, and
+      guidify-ai/vapi-studio-project when the question is about starting a
+      project. Only files listed in those repos' trees can be read.
+
+    answer_rules:
+      - "Spoken plain text, at most three short sentences."
+      - "No markdown, code blocks, URLs, or lists."
+      - "If the repos don't cover it, say so."
+
+    after_answer: "Anything else about Studio?"
+
+    on_no_answer:
+      actions:
+        - email_unanswered_docs_question
+      say: "Sorry, I couldn't find that in the docs just now."
+
+    routes:
+      another_question:
+        goto: docs_answer
+      done:
+        goto: docs_end
+      issue:
+        goto: support_entry
+      project:
+        goto: sales_entry
+
+    limit: 5 answers per call
+
+  docs_end:
+    type: terminal
+    set:
+      outcome: docs_answered
+    say: >
+      Glad to help. The full docs are on GitHub, in the guidify-ai vapi-studio
+      repo. Thanks for trying Vapi Studio!
+    goto: end
+
+# =============================================================================
+# SHARED CONTACT FLOW
+# =============================================================================
+
+  contact_method:
+    type: decision
+
+    guard:
+      require: "contact_consent == granted"
+
+    next:
+      if:
+        - condition: "caller_phone != null"
+          goto: caller_phone_consent
+        - else:
+          goto: request_phone
+
+  caller_phone_consent:
+    type: consent
+    target: caller_phone_reuse_consent
+
+    say: "Great. Can we use the number you're calling from?"
+
+    routes:
+      granted:
+        actions:
+          - copy: "caller_phone -> contact_phone"
+        goto: emit_outcome
+
+      declined:
+        goto: request_phone
+
+      ambiguous:
+        goto: request_phone
+
+  request_phone:
+    type: extraction
+    target: contact_phone
+
+    say: "No problem. What phone number should we use?"
+
+    validation:
+      type: phone
+      allow_international: true
+
+    retry:
+      maximum_attempts: 1
+      say: "I didn't catch the full number. Could you say it once more?"
+
+    on_valid:
+      goto: emit_outcome
+
+    on_failure:
+      goto: contact_failure_end
+
+  emit_outcome:
+    type: action
+
+    routes:
+      sales_lead:
+        when: "outcome == sales_lead"
+        action: emit_sales_lead
+        goto: sales_success_end
+
+      support_request:
+        when: "outcome == support_request"
+        action: emit_support_request
+        goto: support_success_end
+
+      feature_request:
+        when: "outcome == feature_request"
+        action: emit_feature_request
+        goto: feature_success_end
+
+  sales_success_end:
+    type: terminal
+    say: "Perfect. I'll pass that along. Thanks for trying Vapi Studio!"
+    actions:
+      - persist_demo_analytics
+    goto: end
+
+  support_success_end:
+    type: terminal
+    say: "Perfect. I'll pass the issue to our team."
+    actions:
+      - persist_demo_analytics
+    goto: end
+
+  feature_success_end:
+    type: terminal
+    say: "Perfect. I've got it. Thanks for the suggestion!"
+    actions:
+      - persist_demo_analytics
+    goto: end
+
+  contact_failure_end:
+    type: terminal
+    say: >
+      No worries. We won't hold up the demo over that.
+      Thanks for trying Vapi Studio!
+    actions:
+      - persist_demo_analytics
+    goto: end
+
+  end_without_contact:
+    type: terminal
+    actions:
+      - persist_demo_analytics
+    goto: end
+
+  end:
+    type: end
+
+# =============================================================================
+# OUTPUT EVENTS
+# =============================================================================
+
+events:
+
+  emit_sales_lead:
+    only_if:
+      - "outcome == sales_lead"
+      - "contact_consent == granted"
+      - "contact_phone != null"
+
+    payload:
+      type: sales_lead
+      source: landing_voice_demo
+      business: "{{ business_description }}"
+      use_case: "{{ use_case }}"
+      heard_about_us: "{{ discovery_source }}"
+      phone: "{{ contact_phone }}"
+      consent: true
+      summary:
+        generated: true
+        instruction: >
+          Maximum two factual sentences. Do not invent company size,
+          budget, urgency, authority, or requirements.
+
+  emit_support_request:
+    only_if:
+      - "outcome == support_request"
+      - "contact_consent == granted"
+      - "contact_phone != null"
+
+    payload:
+      type: support_request
+      source: landing_voice_demo
+      issue: "{{ support_issue }}"
+      phone: "{{ contact_phone }}"
+      consent: true
+      summary:
+        generated: true
+        instruction: >
+          Summarize the reported problem factually in at most two sentences.
+          Preserve useful technical terminology. Do not invent a diagnosis.
+
+  emit_feature_request:
+    only_if:
+      - "outcome == feature_request"
+      - "contact_consent == granted"
+      - "contact_phone != null"
+
+    payload:
+      type: feature_request
+      source: landing_voice_demo
+      feature: "{{ feature_description }}"
+      phone: "{{ contact_phone }}"
+      contact_allowed: true
+
+  emit_feature_event_without_contact:
+    payload:
+      type: feature_request
+      source: landing_voice_demo
+      feature: "{{ feature_description }}"
+      contact_allowed: false
+      phone: null
+
+# =============================================================================
+# NON-LINEAR SCENARIOS
+# =============================================================================
+
+non_linear_scenarios:
+
+  support_issue_in_first_turn:
+    caller: >
+      My decision tree stops after the extractor and I can't figure out why.
+
+    expected:
+      primary_intent: support
+      support_issue: "decision tree stops after the extractor"
+
+    next_question: >
+      Got it. What were you doing when it happened? An error message or your
+      Studio version helps too.
+
+    must_not_ask:
+      - "What's going wrong?"
+      - "What kind of business are you in?"
+
+  feature_in_first_turn:
+    caller: >
+      You should let us run two extractors in parallel.
+
+    expected:
+      primary_intent: feature_request
+      feature_description: "run two extractors in parallel"
+
+    next_behavior: >
+      Briefly acknowledge the idea and ask whether the caller wants to be
+      contacted if the team wants to discuss it.
+
+  sales_multi_answer:
+    caller: >
+      We run a property management company and want to replace our answering service.
+
+    expected:
+      primary_intent: sales_or_use_case
+      business_description: "property management"
+      use_case: "replace answering service"
+
+    must_not_ask:
+      - "What kind of business is it?"
+      - "What would you like the assistant to do?"
+
+  ambiguous_bug_or_feature:
+    caller: >
+      Studio doesn't let me run two extractors together.
+
+    rule: >
+      This may be either a support issue or a feature request. If the caller
+      describes expected existing behavior that is failing, prefer support.
+      If they are requesting a capability they believe does not exist, prefer
+      feature_request. If confidence is low, clarify once.
+
+    clarification: >
+      Are you trying to fix something that's supposed to work already,
+      or suggesting a new capability?
+
+  caller_answers_future_questions:
+    assistant: "What kind of business or project is it for?"
+    caller: >
+      Dental. We want appointment booking, I found Studio on GitHub,
+      and yes, someone can contact me.
+
+    expected:
+      business_description: "dental"
+      use_case: "appointment booking"
+      discovery_source: "GitHub"
+      contact_consent: granted
+      contact_purpose: sales_discussion
+
+    next: contact_method
+
+  business_refusal:
+    assistant: "What kind of business or project is it for?"
+    caller: "I'd rather not say."
+
+    expected_behavior: >
+      Do not ask again. Continue to use-case collection.
+
+  vague_use_case:
+    caller: "Customer service stuff."
+
+    expected_behavior: >
+      Accept it. Do not force more detail merely to improve data quality.
+
+  off_topic:
+    caller: "What's the weather?"
+
+    response: >
+      I might be the wrong demo for that one. Tell me what brings you to
+      Vapi Studio, and I'll take it from there.
+
+    rule: >
+      Redirect once. Do not become a general assistant.
+
+  technical_question:
+    caller: "How is Studio doing this?"
+
+    response_instruction: >
+      Give at most two short sentences explaining that Studio uses controlled
+      conversation steps and routing while allowing natural speech. Then resume
+      the previous state.
+
+  consent_withdrawal:
+    previous:
+      contact_consent: granted
+      contact_phone: "+1..."
+    caller: "Actually, don't contact me."
+
+    expected:
+      contact_consent: declined
+      contact_phone: null
+      emit_contact_event: false
+
+# =============================================================================
+# ANALYTICS
+# =============================================================================
+
+analytics:
+
+  track:
+    - demo_started
+    - entry_intent_detected
+    - entry_intent_unknown
+    - clarification_required
+    - sales_path_entered
+    - docs_path_entered
+    - support_path_entered
+    - feature_path_entered
+    - explorer_path_entered
+    - business_extracted
+    - use_case_scenarios_offered
+    - use_case_extracted
+    - docs_answer_given
+    - docs_question_unanswered
+    - support_issue_extracted
+    - issue_report_sent
+    - feature_request_extracted
+    - discovery_source_extracted
+    - contact_offered
+    - contact_consent_granted
+    - contact_consent_declined
+    - caller_phone_reuse_granted
+    - contact_phone_collected
+    - sales_lead_created
+    - support_request_created
+    - feature_request_created
+    - demo_completed
+    - demo_abandoned
+
+  dimensions:
+    - primary_intent
+    - discovery_source
+    - contact_consent
+    - outcome
+
+# =============================================================================
+# LANDING PAGE VISUALIZATION
+# =============================================================================
+
+landing_page_visualization:
+
+  principle: >
+    Keep the voice experience extremely simple. Reveal Studio's internal
+    machinery visually beside the conversation.
+
+  example_events:
+    - "Intent → Support"
+    - "Extracted → Issue: flow stops after extractor"
+    - "Route → Support"
+    - "Consent → Contact: YES"
+    - "Context → Use caller number"
+    - "Integration → Support request created"
+
+  feature_request_example:
+    - "Intent → Feature Request"
+    - "Extracted → Feature: parallel extractors"
+    - "Route → Feature Request"
+    - "Consent → Follow-up: NO"
+    - "Integration → Feature request saved"
+
+  sales_example:
+    - "Intent → Sales / Use Case"
+    - "Extracted → Business: property management"
+    - "Extracted → Use case: replace answering service"
+    - "Extracted → Source: GitHub"
+    - "Consent → Sales contact: YES"
+    - "Integration → Lead created"
+
+# =============================================================================
+# IMPLEMENTATION REQUIREMENTS
+# =============================================================================
+
+implementation:
+
+  deterministic_control:
+    - >
+      Business routing, consent gates, and event emission should be deterministic.
+    - >
+      Generative behavior is appropriate for understanding, extraction,
+      short acknowledgements, and limited dynamic wording.
+    - >
+      Never use free-form generation to decide whether consent exists.
+
+  intention_scanner:
+    - "Rank only currently valid intentions."
+    - "Use relevant prior state and routing context."
+    - "Always support UNKNOWN."
+    - "Do not trigger irreversible actions from low-confidence classification."
+
+  extractor:
+    - "Run extraction on every meaningful caller utterance."
+    - "Extract future fields when confidently volunteered."
+    - "Preserve caller wording where normalization is unnecessary."
+    - "Never fabricate missing information."
+
+  state:
+    - "Persist extracted values between nodes."
+    - "Never repeat successfully answered questions."
+    - "Allow jumping forward when future information was already volunteered."
+    - "Latest explicit correction wins."
+
+  consent:
+    - "Consent must be explicit."
+    - "Silence is not consent."
+    - "Ambiguity is not consent."
+    - "Consent must have a known purpose."
+    - "Consent may be withdrawn at any time."
+    - "Withdrawal overrides previous consent."
+    - "Never create a contact request without valid consent."
+
+  voice_ux:
+    - "Keep most assistant turns below 15 spoken words when practical."
+    - "Never read more than three choices."
+    - "Always accept natural answers outside the examples."
+    - "Never say 'select option one' or equivalent."
+    - "Do not announce extraction, classification, state, or routing."
+    - "Do not repeat the caller's entire answer unless clarification requires it."
+
+# =============================================================================
+# ACCEPTANCE TESTS
+# =============================================================================
+
+acceptance_tests:
+
+  - name: "Issue — provided immediately, reported, follow-up by email"
+    turns:
+      - assistant: "Are you here about a project, a question about Studio or its docs, or just exploring?"
+        caller: "My flow stops after the extractor."
+      - assistant: "Got it. What were you doing when it happened? An error message or your Studio version helps too."
+        caller: "I don't know."
+      - assistant: "Thanks — I've sent that to the Vapi Studio team. Want them to get back to you about it?"
+        caller: "Yes."
+      - assistant: "We already have your email. Prefer a follow-up by email, or a call?"
+        caller: "Email."
+    expected:
+      primary_intent: support
+      support_issue: "My flow stops after the extractor."
+      emitted_events: [email_issue_report, emit_support_request]
+      contact_consent: granted
+      outcome: support_request
+
+  - name: "Docs question"
+    turns:
+      - assistant: "Are you here about a project, a question about Studio or its docs, or just exploring?"
+        caller: "I have a question about the vapi studio."
+      - assistant: "Sure — what's your question about Studio?"
+        caller: "How do I add a tool?"
+      - assistant: "Let me check the Studio docs. <answer from the repos> Anything else about Studio?"
+        caller: "No, that's all."
+    expected:
+      primary_intent: docs_question
+      outcome: docs_answered
+
+  - name: "Feature request — no contact"
+    turns:
+      - assistant: "What brings you here today?"
+        caller: "I'd like Studio to support parallel extractors."
+      - assistant: "Would you like us to contact you if we want to discuss that idea?"
+        caller: "No, just wanted to suggest it."
+    expected:
+      primary_intent: feature_request
+      feature_description: "support parallel extractors"
+      contact_consent: declined
+      outcome: feature_request
+      emitted_event: emit_feature_event_without_contact
+
+  - name: "Sales — natural multi-answer"
+    turns:
+      - assistant: "What brings you here today?"
+        caller: >
+          We have a property management company and want to replace our answering service.
+      - assistant: "How did you hear about Vapi Studio?"
+        caller: "GitHub."
+      - assistant: "Would you like someone from our team to contact you?"
+        caller: "Sure."
+      - assistant: "Can we use the number you're calling from?"
+        caller: "Yes."
+    expected:
+      primary_intent: sales_or_use_case
+      business_description: "property management"
+      use_case: "replace answering service"
+      discovery_source: "GitHub"
+      contact_consent: granted
+      outcome: sales_lead
+      emitted_event: emit_sales_lead
+
+  - name: "Project — business, scenarios, consent"
+    turns:
+      - assistant: "Are you here about a project, a question about Studio or its docs, or just exploring?"
+        caller: "I have a project in mind."
+      - assistant: "Got it — a project. Nice. What kind of business is it? A couple of words is enough."
+        caller: "A pizza shop."
+      - assistant: "A Studio phone assistant for a pizza shop could take pizza orders, answer hours and menu questions, or give delivery status updates. Which one fits best — or is it something else?"
+        caller: "The second one."
+      - assistant: "So a pizza shop needs an assistant that can answer hours and menu questions — nice. One quick question — how did you hear about Vapi Studio?"
+        caller: "LinkedIn."
+      - assistant: "Would you like someone from the Vapi Studio team to contact you to discuss it further?"
+        caller: "No."
+    expected:
+      primary_intent: sales_or_use_case
+      business_description: "pizza shop"
+      use_case: "answer hours and menu questions"
+      discovery_source: "LinkedIn"
+      contact_consent: declined
+      outcome: demo_completed
+
+  - name: "Exploring — same path, you pick"
+    turns:
+      - assistant: "Are you here about a project, a question about Studio or its docs, or just exploring?"
+        caller: "Just exploring."
+      - assistant: "Let's try it on a business. Name one in a couple of words, real or made up — like a pizza shop or a dentist — or say \"you pick\"."
+        caller: "You pick."
+      - assistant: "A Studio phone assistant for a pizza shop could … Which one fits best — or is it something else?"
+        caller: "All of them."
+    expected:
+      primary_intent: exploring
+      business_description: "pizza shop"
+
+  - name: "Consent withdrawal"
+    turns:
+      - caller: "Yes, have someone call me."
+      - caller: "Actually, don't contact me."
+    expected:
+      contact_consent: declined
+      contact_phone: null
+      emit_contact_event: false

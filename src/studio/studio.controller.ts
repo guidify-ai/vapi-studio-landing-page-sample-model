@@ -1,16 +1,38 @@
-import { Body, Controller, Get, Headers, Param, Post, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  Post,
+  Req,
+} from '@nestjs/common';
 import type { Request } from 'express';
 import { randomUUID } from 'crypto';
 import { StudioSessionService } from './studio-session.service';
-import { OutboundCallService } from './outbound-call.service';
+import {
+  OutboundCallService,
+  outboundFromNumberReadable,
+} from './outbound-call.service';
+import { RecaptchaService } from './recaptcha.service';
 import { readWebCallerIdFromRequest } from '../caller/caller-identity';
 import { STUDIO_PRESETS_CATALOG, type StudioCallPresets } from './studio-presets';
+
+function clientIp(req: Request): string | undefined {
+  const xf = req.headers['x-forwarded-for'];
+  if (typeof xf === 'string' && xf.trim()) {
+    return xf.split(',')[0]?.trim();
+  }
+  if (Array.isArray(xf) && xf[0]) return String(xf[0]).split(',')[0]?.trim();
+  return req.socket?.remoteAddress || undefined;
+}
 
 @Controller('studio')
 export class StudioController {
   constructor(
     private readonly sessions: StudioSessionService,
     private readonly outbound: OutboundCallService,
+    private readonly recaptcha: RecaptchaService,
   ) {}
 
   /** Preset catalog for the Studio toggles panel. */
@@ -22,14 +44,18 @@ export class StudioController {
   /** Public outbound call display config (caller ID label for the LP form). */
   @Get('outbound-config')
   outboundConfig() {
-    const fromNumberReadable =
-      process.env.VAPI_PHONE_NUMBER_READABLE?.trim() || null;
-    return { fromNumberReadable };
+    return { fromNumberReadable: outboundFromNumberReadable() ?? null };
+  }
+
+  /** Public reCAPTCHA v3 site key (secret stays on the sample). */
+  @Get('recaptcha-config')
+  recaptchaConfig() {
+    return this.recaptcha.publicConfig();
   }
 
   /** Call button — opening entry phrase only (no user text). */
   @Post('conversations/call')
-  call(
+  async call(
     @Req() req: Request,
     @Headers('cookie') cookie: string | undefined,
     @Body()
@@ -42,8 +68,14 @@ export class StudioController {
       contactEmail?: string;
       guestCompanyName?: string;
       companyName?: string;
+      recaptchaToken?: string;
     },
   ) {
+    await this.recaptcha.assertHuman({
+      token: body?.recaptchaToken,
+      action: 'studio_chat_start',
+      remoteIp: clientIp(req),
+    });
     return this.sessions.startCall(this.webCallerId(req, cookie, body?.callerId), {
       afterHours: body?.afterHours === true,
       abOverrides: body?.abOverrides,
@@ -59,7 +91,8 @@ export class StudioController {
    * Requires company / email / name + phone + consent (TCPA).
    */
   @Post('outbound-call')
-  outboundCall(
+  async outboundCall(
+    @Req() req: Request,
     @Body()
     body: {
       companyName?: string;
@@ -68,8 +101,14 @@ export class StudioController {
       phone?: string;
       consent?: boolean;
       notes?: string;
+      recaptchaToken?: string;
     },
   ) {
+    await this.recaptcha.assertHuman({
+      token: body?.recaptchaToken,
+      action: 'studio_outbound_call',
+      remoteIp: clientIp(req),
+    });
     return this.outbound.requestCall({
       companyName: String(body?.companyName || ''),
       contactName: String(body?.contactName || ''),
@@ -82,11 +121,16 @@ export class StudioController {
 
   /** First message starts a new text conversation (opening + user turn). */
   @Post('conversations')
-  start(
+  async start(
     @Req() req: Request,
     @Headers('cookie') cookie: string | undefined,
-    @Body() body: { text?: string; callerId?: string },
+    @Body() body: { text?: string; callerId?: string; recaptchaToken?: string },
   ) {
+    await this.recaptcha.assertHuman({
+      token: body?.recaptchaToken,
+      action: 'studio_chat_start',
+      remoteIp: clientIp(req),
+    });
     return this.sessions.startWithMessage(
       String(body?.text ?? ''),
       this.webCallerId(req, cookie, body?.callerId),

@@ -6,13 +6,13 @@ import { AppModule } from './app.module';
 import { registerEventShadows } from './shadows/register';
 
 async function bootstrap() {
-  // Optional app-owned event hooks (gitignored modules under ./shadows).
   registerEventShadows();
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: false,
   });
   app.enableCors({ origin: true, credentials: true });
+  // Multi-project public routing lives in platform ngrok-helper (:9080), not here.
   mountStudioUiAssets(app);
   const port = Number(process.env.PORT ?? 9998);
   await app.listen(port);

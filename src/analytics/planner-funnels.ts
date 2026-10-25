@@ -1,8 +1,33 @@
 /** Explicit milestone tags — stamp via `stampAnalyticsTag`; no payload.funnels. */
 export const PLANNER_ANALYTICS_TAGS = {
   plannerStarted: 'planner_started',
-  /** LP intro fields accepted into Conversation memory (name / email / company). */
   intakeSeeded: 'intake_seeded',
+  demoStarted: 'demo_started',
+  entryIntent: 'entry_intent_detected',
+  clarificationRequired: 'clarification_required',
+  salesPath: 'sales_path_entered',
+  supportPath: 'support_path_entered',
+  featurePath: 'feature_path_entered',
+  explorerPath: 'explorer_path_entered',
+  docsPath: 'docs_path_entered',
+  businessExtracted: 'business_extracted',
+  scenariosOffered: 'use_case_scenarios_offered',
+  useCaseExtracted: 'use_case_extracted',
+  docsAnswered: 'docs_answer_given',
+  docsUnanswered: 'docs_question_unanswered',
+  supportIssueExtracted: 'support_issue_extracted',
+  issueReported: 'issue_report_sent',
+  featureRequestExtracted: 'feature_request_extracted',
+  discoverySourceExtracted: 'discovery_source_extracted',
+  contactOffered: 'contact_offered',
+  contactConsentGranted: 'contact_consent_granted',
+  contactConsentDeclined: 'contact_consent_declined',
+  callerPhoneReuseGranted: 'caller_phone_reuse_granted',
+  contactPhoneCollected: 'contact_phone_collected',
+  salesLeadCreated: 'sales_lead_created',
+  supportRequestCreated: 'support_request_created',
+  featureRequestCreated: 'feature_request_created',
+  demoCompleted: 'demo_completed',
   companyDoesSet: 'company_does_set',
   useCaseSet: 'use_case_set',
   discoveryComplete: 'discovery_complete',
@@ -16,3 +41,43 @@ export const PLANNER_ANALYTICS_TAGS = {
   phoneDemoTopic: 'phone_demo_topic',
   phoneDemoHeardAbout: 'phone_demo_heard_about',
 } as const;
+
+/** Funnel catalog for Studio analytics UI. */
+export const PLANNER_FUNNELS = [
+  {
+    id: 'landing_voice_demo',
+    label: 'Landing voice demo',
+    steps: [
+      { id: 'start', tags: [PLANNER_ANALYTICS_TAGS.demoStarted] },
+      { id: 'intent', tags: [PLANNER_ANALYTICS_TAGS.entryIntent] },
+      {
+        id: 'path',
+        tags: [
+          PLANNER_ANALYTICS_TAGS.salesPath,
+          PLANNER_ANALYTICS_TAGS.docsPath,
+          PLANNER_ANALYTICS_TAGS.supportPath,
+          PLANNER_ANALYTICS_TAGS.featurePath,
+          PLANNER_ANALYTICS_TAGS.explorerPath,
+        ],
+      },
+      {
+        id: 'consent',
+        tags: [
+          PLANNER_ANALYTICS_TAGS.contactConsentGranted,
+          PLANNER_ANALYTICS_TAGS.contactConsentDeclined,
+        ],
+      },
+      {
+        id: 'outcome',
+        tags: [
+          PLANNER_ANALYTICS_TAGS.salesLeadCreated,
+          PLANNER_ANALYTICS_TAGS.docsAnswered,
+          PLANNER_ANALYTICS_TAGS.issueReported,
+          PLANNER_ANALYTICS_TAGS.supportRequestCreated,
+          PLANNER_ANALYTICS_TAGS.featureRequestCreated,
+          PLANNER_ANALYTICS_TAGS.demoCompleted,
+        ],
+      },
+    ],
+  },
+] as const;

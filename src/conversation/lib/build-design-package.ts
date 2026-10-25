@@ -283,6 +283,6 @@ export function sampleRevealMessage(sample: string): string {
     '',
     sample,
     '',
-    'Tell me what to change, or say Help me build it if you want Guidify to take it from here. Is there anything else I can help with?',
+    'Tell me what to change, or say Help me build it if you want Guidify AI to take it from here. Is there anything else I can help with?',
   ].join('\n');
 }

@@ -544,7 +544,7 @@ function showSampleListen(): ListenExpectation {
       ...portalBoosts(),
     ],
     hints: [
-      'Help me build it / hire Guidify → help_build.',
+      'Help me build it / hire Guidify AI → help_build.',
       'Change / fix / unnatural → sample_tweak.',
       'Looks good / thanks → sample_ok.',
       'Product FAQ → product_faq (stay on sample; do not restart intake).',
@@ -678,7 +678,7 @@ export class OfferHelpNode extends AgentNode<PlannerSchema> {
     const kb = knowledgeReply(ctx.userText || '');
     if (kb && ctx.intention !== PLANNER_INTENTIONS.helpBuild) {
       return ctx.output.sayAndListen(
-        `${kb}\n\nWhen you want Guidify to build it, say Help me build it. Is there anything else I can help with?`,
+        `${kb}\n\nWhen you want Guidify AI to build it, say Help me build it. Is there anything else I can help with?`,
         offerHelpListen(),
       );
     }
@@ -694,8 +694,8 @@ export class OfferHelpNode extends AgentNode<PlannerSchema> {
       await this.leadMail.notifyQuoteRequested(ctx);
       const email = ctx.memory.contactEmail?.trim();
       const followUp = email
-        ? `Great — Guidify will follow up at ${email}, with this draft attached. Is there anything else I can help with?`
-        : "Great — Guidify will follow up using the email from your intake, with this draft attached. Is there anything else I can help with?";
+        ? `Great — Guidify AI will follow up at ${email}, with this draft attached. Is there anything else I can help with?`
+        : "Great — Guidify AI will follow up using the email from your intake, with this draft attached. Is there anything else I can help with?";
       return ctx.output.sayAndListen(followUp, {
         intentions: [
           { name: PLANNER_INTENTIONS.productFaq, boost: 24 },
@@ -717,7 +717,7 @@ export class OfferHelpNode extends AgentNode<PlannerSchema> {
     }
     ctx.memory.offerHelp = true;
     return ctx.output.sayAndListen(
-      'When you want Guidify to build it, say Help me build it. Is there anything else I can help with?',
+      'When you want Guidify AI to build it, say Help me build it. Is there anything else I can help with?',
       offerHelpListen(),
     );
   }

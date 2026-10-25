@@ -13,6 +13,7 @@ import {
   MockClaudeBrainAdapter,
   MockGeminiBrainAdapter,
   MockGrokBrainAdapter,
+  OpenAiDecisionsBrainAdapter,
   ConversationEntity,
   FlowLoader,
   ProjectEntity,
@@ -21,6 +22,7 @@ import {
   WorkflowLoader,
   StudioUiModule,
   type BrainAdapter,
+  type StudioBrainConfig,
 } from '@guidify-ai/vapi-studio';
 import { HealthController } from './health/health.controller';
 import { FlowDiagramController } from './flow-diagram/flow-diagram.controller';
@@ -31,6 +33,7 @@ import { StudioController } from './studio/studio.controller';
 import { StudioSessionService } from './studio/studio-session.service';
 import { StudioEventBuffer } from './studio/studio-event-buffer';
 import { StudioLiveSpeechBuffer } from './studio/studio-live-speech.buffer';
+import { RecaptchaService } from './studio/recaptcha.service';
 import { FormResumeService } from './forms/form-resume.service';
 import { CallerPersistenceModule } from './caller/caller-persistence.module';
 import { CallerProfileEntity } from './caller/caller-profile.entity';
@@ -46,19 +49,61 @@ import { UserInterruptedStrategy } from './vapi/strategies/user-interrupted.stra
 import { ToolCallsStrategy } from './vapi/strategies/tool-calls.strategy';
 import { PlannerConversationEntry } from './conversation/entry';
 import {
-  AcknowledgeNode,
-  PhoneDemoLeadNode,
-  PhoneDemoHeardAboutNode,
-  PhoneDemoWhatNode,
-  PhoneDemoCostNode,
-  PhoneDemoNotDevNode,
-  PhoneDemoWhatIntention,
-  PhoneDemoCostIntention,
-  PhoneDemoNotDevIntention,
-  PhoneDemoClarifyIntention,
-  PhoneDemoUseCaseIntention,
-  PhoneDemoHeardAboutIntention,
-} from './conversation/nodes/planner/phone-demo.nodes';
+  DemoGreetNode,
+  DemoClarifyEntryNode,
+  DemoSalesEntryNode,
+  DemoSalesBusinessNode,
+  DemoSalesUseCaseNode,
+  DemoSalesDiscoveryNode,
+  DemoSalesConsentNode,
+  DemoSalesNoContactEndNode,
+  DemoSupportEntryNode,
+  DemoSupportIssueNode,
+  DemoSupportDetailNode,
+  DemoSupportConsentNode,
+  DemoSupportNoContactEndNode,
+  DemoFeatureEntryNode,
+  DemoFeatureDescriptionNode,
+  DemoFeatureConsentNode,
+  DemoFeatureNoContactEndNode,
+  DemoDocsAnswerNode,
+  DemoDocsEndNode,
+  DemoContactMethodNode,
+  DemoCallerPhoneConsentNode,
+  DemoRequestPhoneNode,
+  DemoEmitOutcomeNode,
+  DemoSalesSuccessEndNode,
+  DemoSupportSuccessEndNode,
+  DemoFeatureSuccessEndNode,
+  DemoContactFailureEndNode,
+  EntrySalesIntention,
+  EntryDocsIntention,
+  EntrySupportIntention,
+  EntryFeatureIntention,
+  EntryExploringIntention,
+  EntryClarifyIntention,
+  SalesBusinessIntention,
+  SalesUseCaseIntention,
+  SalesDiscoveryIntention,
+  SalesConsentYesIntention,
+  SalesConsentNoIntention,
+  DocsQuestionIntention,
+  DocsDoneIntention,
+  SupportIssueIntention,
+  SupportDetailIntention,
+  SupportConsentYesIntention,
+  SupportConsentNoIntention,
+  FeatureDescriptionIntention,
+  FeatureConsentYesIntention,
+  FeatureConsentNoIntention,
+  PhoneReuseYesIntention,
+  PhoneReuseNoIntention,
+  ContactPhoneIntention,
+  ContactPreferEmailIntention,
+  ContactPreferCallIntention,
+  ContactEmailCollectIntention,
+  OptionalSkipIntention,
+} from './conversation/nodes/planner/demo-conversation.nodes';
 import {
   GoodbyeNode,
   ContinueNode,
@@ -75,6 +120,7 @@ import {
 } from './conversation/intentions/planner.intentions';
 import { brainConfig } from './brain/brain.config';
 import { PlannerMailModule } from './mail/planner-mail.module';
+import { AdvisorModule } from './advisor/advisor.module';
 import { OutboundCallService } from './studio/outbound-call.service';
 
 function resolveBrainAdapter() {
@@ -87,6 +133,8 @@ function resolveBrainAdapter() {
       return GeminiBrainAdapter;
     case 'studio-grok':
       return GrokBrainAdapter;
+    case 'studio-openai-decisions':
+      return OpenAiDecisionsBrainAdapter;
     case 'mock-claude':
       return MockClaudeBrainAdapter;
     case 'mock-gemini':
@@ -100,9 +148,27 @@ function resolveBrainAdapter() {
   }
 }
 
+function resolveStudioBrain(): StudioBrainConfig {
+  const chatGpt = {
+    model: brainConfig.model,
+    providerOptions: brainConfig.providerOptions,
+    timeoutMs: brainConfig.timeoutMs,
+  };
+  if (brainConfig.adapter === 'studio-openai-decisions') {
+    return {
+      model: brainConfig.decisions.model,
+      confidenceThreshold: brainConfig.confidenceThreshold,
+      timeoutMs: brainConfig.decisions.timeoutMs,
+      llm: { adapter: ChatGptBrainAdapter, ...chatGpt },
+    };
+  }
+  return { ...chatGpt, confidenceThreshold: brainConfig.confidenceThreshold };
+}
+
 @Module({
   imports: [
     PlannerMailModule,
+    AdvisorModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
       url:
@@ -122,31 +188,107 @@ function resolveBrainAdapter() {
       entryPoint: PlannerConversationEntry,
       brainAdapter: resolveBrainAdapter(),
       eventListeners: [StudioEventBuffer],
-      brain: {
-        model: brainConfig.model,
-        confidenceThreshold: brainConfig.confidenceThreshold,
+      brain: resolveStudioBrain(),
+      limits: {
+        endMessage:
+          "We've been talking for a while, so I'm going to end this call now. Please call back if you still need help.",
       },
       intentions: [
         MadDetectIntention,
         GibberishDetectIntention,
         SoftContinueIntention,
         NothingElseIntention,
-        PhoneDemoWhatIntention,
-        PhoneDemoCostIntention,
-        PhoneDemoNotDevIntention,
-        PhoneDemoClarifyIntention,
-        PhoneDemoUseCaseIntention,
-        PhoneDemoHeardAboutIntention,
+        EntrySalesIntention,
+        EntryDocsIntention,
+        EntrySupportIntention,
+        EntryFeatureIntention,
+        EntryExploringIntention,
+        EntryClarifyIntention,
+        SalesBusinessIntention,
+        SalesUseCaseIntention,
+        SalesDiscoveryIntention,
+        SalesConsentYesIntention,
+        SalesConsentNoIntention,
+        DocsQuestionIntention,
+        DocsDoneIntention,
+        SupportIssueIntention,
+        SupportDetailIntention,
+        SupportConsentYesIntention,
+        SupportConsentNoIntention,
+        FeatureDescriptionIntention,
+        FeatureConsentYesIntention,
+        FeatureConsentNoIntention,
+        PhoneReuseYesIntention,
+        PhoneReuseNoIntention,
+        ContactPhoneIntention,
+        ContactPreferEmailIntention,
+        ContactPreferCallIntention,
+        ContactEmailCollectIntention,
+        OptionalSkipIntention,
       ],
       nodes: [
-        { className: 'AcknowledgeNode', useClass: AcknowledgeNode },
-        { className: 'PhoneDemoWhatNode', useClass: PhoneDemoWhatNode },
-        { className: 'PhoneDemoCostNode', useClass: PhoneDemoCostNode },
-        { className: 'PhoneDemoNotDevNode', useClass: PhoneDemoNotDevNode },
-        { className: 'PhoneDemoLeadNode', useClass: PhoneDemoLeadNode },
+        { className: 'DemoGreetNode', useClass: DemoGreetNode },
+        { className: 'DemoClarifyEntryNode', useClass: DemoClarifyEntryNode },
+        { className: 'DemoSalesEntryNode', useClass: DemoSalesEntryNode },
+        { className: 'DemoSalesBusinessNode', useClass: DemoSalesBusinessNode },
+        { className: 'DemoSalesUseCaseNode', useClass: DemoSalesUseCaseNode },
         {
-          className: 'PhoneDemoHeardAboutNode',
-          useClass: PhoneDemoHeardAboutNode,
+          className: 'DemoSalesDiscoveryNode',
+          useClass: DemoSalesDiscoveryNode,
+        },
+        { className: 'DemoSalesConsentNode', useClass: DemoSalesConsentNode },
+        {
+          className: 'DemoSalesNoContactEndNode',
+          useClass: DemoSalesNoContactEndNode,
+        },
+        { className: 'DemoSupportEntryNode', useClass: DemoSupportEntryNode },
+        { className: 'DemoSupportIssueNode', useClass: DemoSupportIssueNode },
+        { className: 'DemoSupportDetailNode', useClass: DemoSupportDetailNode },
+        {
+          className: 'DemoSupportConsentNode',
+          useClass: DemoSupportConsentNode,
+        },
+        {
+          className: 'DemoSupportNoContactEndNode',
+          useClass: DemoSupportNoContactEndNode,
+        },
+        { className: 'DemoFeatureEntryNode', useClass: DemoFeatureEntryNode },
+        {
+          className: 'DemoFeatureDescriptionNode',
+          useClass: DemoFeatureDescriptionNode,
+        },
+        {
+          className: 'DemoFeatureConsentNode',
+          useClass: DemoFeatureConsentNode,
+        },
+        {
+          className: 'DemoFeatureNoContactEndNode',
+          useClass: DemoFeatureNoContactEndNode,
+        },
+        { className: 'DemoDocsAnswerNode', useClass: DemoDocsAnswerNode },
+        { className: 'DemoDocsEndNode', useClass: DemoDocsEndNode },
+        { className: 'DemoContactMethodNode', useClass: DemoContactMethodNode },
+        {
+          className: 'DemoCallerPhoneConsentNode',
+          useClass: DemoCallerPhoneConsentNode,
+        },
+        { className: 'DemoRequestPhoneNode', useClass: DemoRequestPhoneNode },
+        { className: 'DemoEmitOutcomeNode', useClass: DemoEmitOutcomeNode },
+        {
+          className: 'DemoSalesSuccessEndNode',
+          useClass: DemoSalesSuccessEndNode,
+        },
+        {
+          className: 'DemoSupportSuccessEndNode',
+          useClass: DemoSupportSuccessEndNode,
+        },
+        {
+          className: 'DemoFeatureSuccessEndNode',
+          useClass: DemoFeatureSuccessEndNode,
+        },
+        {
+          className: 'DemoContactFailureEndNode',
+          useClass: DemoContactFailureEndNode,
         },
         { className: 'GoodbyeNode', useClass: GoodbyeNode },
         { className: 'ContinueNode', useClass: ContinueNode },
@@ -171,6 +313,7 @@ function resolveBrainAdapter() {
     StudioLiveSpeechBuffer,
     StudioSessionService,
     OutboundCallService,
+    RecaptchaService,
     FormResumeService,
     ProjectSeedService,
     VapiWebhookGuard,
@@ -212,12 +355,14 @@ export class AppModule implements OnModuleInit {
     } else {
       this.flowLoader.loadFromFile(join(configDir, 'flow.yaml'));
       this.logger.log(
-        'Planner sample: config/flow.yaml (Landing Page Planner LLM)',
+        'Landing demo: config/flow.yaml (config/demo-conversation.yml)',
       );
     }
 
     this.logger.log(
-      `Brain driver=${brainConfig.adapter} model=${brainConfig.model} threshold=${brainConfig.confidenceThreshold}`,
+      brainConfig.adapter === 'studio-openai-decisions'
+        ? `Brain driver=${brainConfig.adapter} model=${brainConfig.decisions.model} llm=${brainConfig.model} threshold=${brainConfig.confidenceThreshold}`
+        : `Brain driver=${brainConfig.adapter} model=${brainConfig.model} threshold=${brainConfig.confidenceThreshold}`,
     );
 
     if (this.brain instanceof MockBrainAdapter) {

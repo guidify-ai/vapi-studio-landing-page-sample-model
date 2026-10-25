@@ -204,7 +204,6 @@ export class AssistantRequestStrategy implements VapiStrategy {
     const publicBase = (
       process.env.PUBLIC_BASE_URL ?? 'http://localhost:9999'
     ).replace(/\/$/, '');
-    const webhookUrl = projectWebhookUrl(publicBase);
 
     // Default PoC path: one transient assistant, flat Custom LLM URL.
     // Squad-only: per-module URL when workflow.yaml is loaded.
@@ -219,21 +218,30 @@ export class AssistantRequestStrategy implements VapiStrategy {
 
     return {
       body: {
-        assistant: {
-          name: 'Vapi Studio Sample',
-          model: {
-            provider: 'custom-llm',
-            url: customLlmUrl,
-            model: 'studio-poc',
-            tools: singleAssistantTools(webhookUrl),
-          },
-          silenceTimeoutSeconds: SILENCE_HARD_TIMEOUT_SECONDS,
-          hooks: stillThereHooks(webhookUrl),
-          startSpeakingPlan: listenTimeoutToVapiStartSpeakingPlan(
-            DEFAULT_LISTEN_TIMEOUT_SECONDS,
-          ),
-        },
+        assistant: sampleTransientAssistant(publicBase, customLlmUrl),
       },
     };
   }
+}
+
+/** Inline (unsaved) assistant: Custom LLM + tools + hooks against this deploy. */
+export function sampleTransientAssistant(
+  publicBase: string,
+  customLlmUrl = projectChatCompletionsUrl(publicBase, null),
+): Record<string, unknown> {
+  const webhookUrl = projectWebhookUrl(publicBase);
+  return {
+    name: 'Vapi Studio Sample',
+    model: {
+      provider: 'custom-llm',
+      url: customLlmUrl,
+      model: 'studio-poc',
+      tools: singleAssistantTools(webhookUrl),
+    },
+    silenceTimeoutSeconds: SILENCE_HARD_TIMEOUT_SECONDS,
+    hooks: stillThereHooks(webhookUrl),
+    startSpeakingPlan: listenTimeoutToVapiStartSpeakingPlan(
+      DEFAULT_LISTEN_TIMEOUT_SECONDS,
+    ),
+  };
 }

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { NodeContext } from '@guidify-ai/vapi-studio';
 import type { PlannerSchema } from '../conversation/planner-schema';
+import { envSubject } from '../app-env';
 import {
   leadMailSubject,
   renderLeadMail,
@@ -40,6 +41,11 @@ export class PlannerLeadMailService {
     return (process.env.HOT_LEAD_TO || '').trim();
   }
 
+  /** Issue reports and unanswered docs questions — the Studio team inbox. */
+  private reportAddr(): string {
+    return (process.env.ISSUE_REPORT_TO || '').trim() || this.toAddr();
+  }
+
   private fromAddr(): string {
     return (
       process.env.RESEND_FROM?.trim() ||
@@ -77,7 +83,7 @@ export class PlannerLeadMailService {
     await this.notify(ctx, 'transfer_human', {
       why: trigger
         ? `Guest asked for a human. Trigger: “${trigger.slice(0, 200)}”`
-        : 'Guest asked for a human. Conversation wrapped; Guidify should follow up.',
+        : 'Guest asked for a human. Conversation wrapped; Guidify AI should follow up.',
       closedReason: 'transfer_human',
       allowAfterSuccess: true,
     });
@@ -87,16 +93,154 @@ export class PlannerLeadMailService {
   async notifyPhoneDemoLead(
     ctx: NodeContext<PlannerSchema>,
   ): Promise<void> {
-    const topic = ctx.memory.phoneDemoTopic || 'unknown';
-    const useCase = (ctx.memory.companyDoes || '').trim().slice(0, 280);
-    const heard = (ctx.memory.heardAbout || '').trim().slice(0, 200);
+    await this.notifyDemoOutcome(ctx, 'sales_lead');
+  }
+
+  /** Landing demo outcomes — sales / support / feature (with or without contact). */
+  async notifyDemoOutcome(
+    ctx: NodeContext<PlannerSchema>,
+    kind:
+      | 'sales_lead'
+      | 'support_request'
+      | 'feature_request'
+      | 'feature_no_contact',
+  ): Promise<void> {
+    const mem = ctx.memory;
+    const phone = (mem.contactPhone || '').trim();
+    const email = (mem.contactEmail || '').trim();
+    const prefer = mem.contactPrefer || (phone ? 'call' : email ? 'email' : '');
+    const biz = (mem.businessDescription || mem.companyDoes || '').trim();
+    const useCase = (mem.useCaseText || '').trim();
+    const heard = (mem.discoverySource || mem.heardAbout || '').trim();
+    const issue = (mem.supportIssue || '').trim();
+    const feature = (mem.featureDescription || '').trim();
+    const contactBits =
+      (prefer ? ` Prefer: ${prefer}.` : '') +
+      (email ? ` Email: ${email}.` : '') +
+      (phone ? ` Phone: ${phone}.` : '');
+
+    let why: string;
+    if (kind === 'sales_lead') {
+      why =
+        `Landing demo sales lead. Business: “${biz || 'n/a'}”. Use case: “${useCase || 'n/a'}”.` +
+        (heard ? ` Heard about: “${heard}”.` : '') +
+        contactBits;
+    } else if (kind === 'support_request') {
+      const detail = (mem.supportDetail || '').trim();
+      why =
+        `Landing demo issue — visitor wants the team to get back to them. Issue: “${issue || 'n/a'}”.` +
+        (detail ? ` Details: “${detail}”.` : '') +
+        contactBits;
+    } else if (kind === 'feature_no_contact') {
+      why = `Landing demo feature request (no contact). Feature: “${feature || 'n/a'}”.`;
+    } else {
+      why =
+        `Landing demo feature request. Feature: “${feature || 'n/a'}”.` +
+        contactBits;
+    }
+
     await this.notify(ctx, 'success_lead', {
-      why:
-        `Outbound phone demo — topic=${topic}. Desired module: “${useCase || 'n/a'}”.` +
-        (heard ? ` Heard about: “${heard}”.` : ''),
-      closedReason: 'phone_demo_lead',
+      why,
+      closedReason: `demo_${kind}`,
       allowAfterSuccess: true,
     });
+  }
+
+  /** Landing demo issue report — sent as soon as the issue is collected, once per conversation. */
+  async notifyIssueReport(ctx: NodeContext<PlannerSchema>): Promise<void> {
+    const mem = ctx.memory;
+    if (mem.issueReportSent) return;
+    const sent = await this.sendReport({
+      subject: `Vapi Studio issue report — ${this.visitorLabel(ctx)}`,
+      rows: [
+        ['Issue', mem.supportIssue || 'n/a'],
+        ['Details', mem.supportDetail || 'n/a'],
+        ...this.visitorRows(ctx),
+      ],
+      logLabel: 'Issue report',
+    });
+    if (sent) mem.issueReportSent = true;
+  }
+
+  /** Docs question the advisor couldn't answer — the team answers by email. */
+  async notifyDocsQuestionUnanswered(
+    ctx: NodeContext<PlannerSchema>,
+    question: string,
+  ): Promise<void> {
+    await this.sendReport({
+      subject: `Vapi Studio docs question — ${this.visitorLabel(ctx)}`,
+      rows: [['Question', question], ...this.visitorRows(ctx)],
+      logLabel: 'Docs question',
+    });
+  }
+
+  private visitorLabel(ctx: NodeContext<PlannerSchema>): string {
+    return (
+      ctx.memory.contactName?.trim() ||
+      ctx.conversation.variables.contactName?.trim() ||
+      'landing visitor'
+    );
+  }
+
+  private visitorRows(ctx: NodeContext<PlannerSchema>): Array<[string, string]> {
+    const mem = ctx.memory;
+    const vars = ctx.conversation.variables;
+    const rows: Array<[string, string]> = [
+      ['Name', mem.contactName || vars.contactName || 'n/a'],
+      ['Email', mem.contactEmail || vars.contactEmail || 'n/a'],
+    ];
+    if (mem.contactPhone) rows.push(['Phone', mem.contactPhone]);
+    rows.push(['Channel', vars.callerChannel || 'n/a']);
+    rows.push(['Conversation', String(ctx.conversation.id || 'unknown')]);
+    return rows;
+  }
+
+  private async sendReport(input: {
+    subject: string;
+    rows: Array<[string, string]>;
+    logLabel: string;
+  }): Promise<boolean> {
+    if (!this.enabled()) {
+      this.log.log(`Resend disabled — skipping ${input.logLabel}`);
+      return false;
+    }
+    const to = this.reportAddr();
+    const key = process.env.RESEND_API_KEY?.trim();
+    if (!to || !key) {
+      this.log.warn(`Resend env missing — skipping ${input.logLabel}`);
+      return false;
+    }
+    const html = `<table cellpadding="6" style="border-collapse:collapse;font-family:sans-serif">${input.rows
+      .map(
+        ([k, v]) =>
+          `<tr><th align="left" valign="top">${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`,
+      )
+      .join('')}</table>`;
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: this.fromAddr(),
+          to: [to],
+          subject: envSubject(input.subject),
+          html,
+        }),
+      });
+      if (!res.ok) {
+        this.log.warn(`Resend error ${res.status} (${input.logLabel})`);
+        return false;
+      }
+      const data = (await res.json().catch(() => ({}))) as { id?: string };
+      this.log.log(`${input.logLabel} sent id=${data.id || '?'} to=${to}`);
+      return true;
+    } catch (err) {
+      this.log.warn(`Resend failed (${input.logLabel}): ${err}`);
+      return false;
+    }
   }
 
   /**
@@ -202,7 +346,7 @@ export class PlannerLeadMailService {
         body: JSON.stringify({
           from: this.fromAddr(),
           to: [to],
-          subject: leadMailSubject(input.outcome, company),
+          subject: envSubject(leadMailSubject(input.outcome, company)),
           html: html.replace(
             '</ul>',
             `<li><strong>Phone:</strong> ${escapeHtml(input.phone)}</li></ul>`,
@@ -293,7 +437,7 @@ export class PlannerLeadMailService {
         body: JSON.stringify({
           from: this.fromAddr(),
           to: [to],
-          subject: leadMailSubject(outcome, company),
+          subject: envSubject(leadMailSubject(outcome, company)),
           html,
         }),
       });
