@@ -2,7 +2,7 @@
 # Standalone sample app. Build with:
 #   docker compose build
 # which passes additional_contexts.vapi-studio → sibling ../guidify-ai (or set VAPI_STUDIO_CONTEXT).
-FROM node:24-bookworm-slim AS build
+FROM node:24.22.1-bookworm-slim AS build
 
 RUN corepack enable && corepack prepare yarn@1.22.22 --activate
 
@@ -36,7 +36,7 @@ RUN if [ -f /pkg/vapi-studio-pub/package.json ]; then \
   && yarn install && yarn build \
   && node -e "const p=JSON.parse(require('fs').readFileSync('node_modules/@guidify-ai/vapi-studio/package.json','utf8')); console.log('vapi-studio', p.version, require.resolve('@guidify-ai/vapi-studio'))"
 
-FROM node:24-bookworm-slim AS runtime
+FROM node:24.22.1-bookworm-slim AS runtime
 WORKDIR /app
 COPY --from=build /pkg/vapi-studio-pub /pkg/vapi-studio
 COPY --from=build /app /app
