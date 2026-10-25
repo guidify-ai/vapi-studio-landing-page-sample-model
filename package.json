@@ -20,7 +20,7 @@
     "test": "bash scripts/run-tests.sh"
   },
   "dependencies": {
-    "@guidify-ai/vapi-studio": "file:../vapi-studio",
+    "@guidify-ai/vapi-studio": "0.2.0",
     "@nestjs/common": "^11.0.12",
     "@nestjs/core": "^11.0.12",
     "@nestjs/platform-express": "^11.0.12",

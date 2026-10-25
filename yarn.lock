@@ -7,8 +7,10 @@
   resolved "https://registry.yarnpkg.com/@borewit/text-codec/-/text-codec-0.2.2.tgz#75025f735c0983b3a871668804a57387e3649375"
   integrity sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ==
 
-"@guidify-ai/vapi-studio@file:../vapi-studio":
+"@guidify-ai/vapi-studio@0.2.0":
   version "0.2.0"
+  resolved "https://registry.yarnpkg.com/@guidify-ai/vapi-studio/-/vapi-studio-0.2.0.tgz#71072ba6802d33203618f2c21195128b535f3f88"
+  integrity sha512-xCUdJTafWqHLcLpTHuF4rU4kv12fFh5uvWHK/Rpgm6e3FdEsuAhF1mVu/0aNmkpLJ2QlyWczmUw8bSfBkOvRxw==
   dependencies:
     uuid "11.1.1"
     yaml "2.9.0"
