@@ -3,6 +3,39 @@ flow:
   id: sample-landing-demo
   start: greet
   # Spec: config/demo-conversation.yml
+
+# —— Intention meanings for the Brain scanner (required by decision drivers) ——
+intentions:
+  entry_sales: Caller wants to use Vapi Studio for their business or a project, or talk to someone about using it.
+  entry_docs: Caller has a question about how Vapi Studio works or where its docs are.
+  entry_support: Something in Vapi Studio is broken or not working for the caller (bug, crash, wrong routing).
+  entry_feature: Caller suggests a feature, idea, or improvement for Vapi Studio.
+  entry_exploring: Caller is just trying the demo, looking around, or curious, with no specific goal.
+  entry_clarify: Caller's reason for calling is unclear and fits none of project, question, problem, feature idea, or exploring.
+  sales_business: Caller names or describes their business or industry, or lets the assistant pick one.
+  sales_use_case: Caller describes what they want a voice agent to do (the use case).
+  sales_discovery: Caller says how they heard about Vapi Studio.
+  sales_consent_yes: Caller agrees to be contacted about their project.
+  sales_consent_no: Caller declines being contacted about their project.
+  docs_question: Caller asks a question about Vapi Studio, its docs, or how to build with it.
+  docs_done: Caller has no more questions (that's all, I'm good, no thanks).
+  support_issue: Caller describes the problem they have with Vapi Studio.
+  support_detail: Caller gives more detail about their problem (steps, error message, version).
+  support_consent_yes: Caller agrees to be contacted about their problem.
+  support_consent_no: Caller declines being contacted about their problem.
+  feature_description: Caller describes the feature or improvement they want.
+  feature_consent_yes: Caller agrees to be contacted about their feature idea.
+  feature_consent_no: Caller declines being contacted about their feature idea.
+  phone_reuse_yes: Caller agrees to be contacted at the number they are calling from.
+  phone_reuse_no: Caller does not want to be contacted at the number they are calling from.
+  contact_phone: Caller states a phone number to be contacted at.
+  contact_prefer_email: Caller prefers to be contacted by email.
+  contact_prefer_call: Caller prefers to be contacted by a phone call.
+  contact_email_collect: Caller states or spells an email address.
+  optional_skip: Caller declines to answer an optional question (skip, rather not say, no idea).
+  nothing_else: Caller has nothing else they need and is wrapping up.
+  isContinue: Caller is back or ready to resume after a pause, silence check, or upset moment (I'm here, go on, okay).
+
 nodes:
   greet:
     class: DemoGreetNode

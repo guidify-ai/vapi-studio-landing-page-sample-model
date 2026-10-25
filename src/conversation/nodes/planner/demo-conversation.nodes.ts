@@ -222,6 +222,9 @@ function entryListenIntentions(): ListenExpectation['intentions'] {
 
 // ─── Entry ───────────────────────────────────────────────────────────────────
 
+/** Intention Studio sets on the entry turn after `continueTo` / handoff. */
+const MODULE_ENTRY_INTENTION = 'studio.moduleEntry';
+
 @Injectable()
 export class DemoGreetNode extends AgentNode<PlannerSchema> {
   async run(ctx: NodeContext<PlannerSchema>): Promise<NodeResult> {
@@ -277,8 +280,10 @@ export class DemoGreetNode extends AgentNode<PlannerSchema> {
 export class DemoClarifyEntryNode extends AgentNode<PlannerSchema> {
   async run(ctx: NodeContext<PlannerSchema>): Promise<NodeResult> {
     // First hop from greet with entry_clarify — ask, do not auto-route to explorer.
+    // The continueTo hop arrives as Studio's module-entry turn, not entry_clarify.
     if (
-      ctx.intention === PLANNER_INTENTIONS.entryClarify &&
+      (ctx.intention === PLANNER_INTENTIONS.entryClarify ||
+        ctx.intention === MODULE_ENTRY_INTENTION) &&
       ctx.visitCount('clarifyEntry') <= 1
     ) {
       await stampAnalyticsTag(ctx, PLANNER_ANALYTICS_TAGS.clarificationRequired);

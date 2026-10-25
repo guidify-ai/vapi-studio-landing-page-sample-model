@@ -13,6 +13,7 @@ import {
   MockClaudeBrainAdapter,
   MockGeminiBrainAdapter,
   MockGrokBrainAdapter,
+  OpenAiDecisionsBrainAdapter,
   ConversationEntity,
   FlowLoader,
   ProjectEntity,
@@ -21,6 +22,7 @@ import {
   WorkflowLoader,
   StudioUiModule,
   type BrainAdapter,
+  type StudioBrainConfig,
 } from '@guidify-ai/vapi-studio';
 import { HealthController } from './health/health.controller';
 import { FlowDiagramController } from './flow-diagram/flow-diagram.controller';
@@ -131,6 +133,8 @@ function resolveBrainAdapter() {
       return GeminiBrainAdapter;
     case 'studio-grok':
       return GrokBrainAdapter;
+    case 'studio-openai-decisions':
+      return OpenAiDecisionsBrainAdapter;
     case 'mock-claude':
       return MockClaudeBrainAdapter;
     case 'mock-gemini':
@@ -142,6 +146,23 @@ function resolveBrainAdapter() {
     default:
       return MockChatGptBrainAdapter;
   }
+}
+
+function resolveStudioBrain(): StudioBrainConfig {
+  const chatGpt = {
+    model: brainConfig.model,
+    providerOptions: brainConfig.providerOptions,
+    timeoutMs: brainConfig.timeoutMs,
+  };
+  if (brainConfig.adapter === 'studio-openai-decisions') {
+    return {
+      model: brainConfig.decisions.model,
+      confidenceThreshold: brainConfig.confidenceThreshold,
+      timeoutMs: brainConfig.decisions.timeoutMs,
+      llm: { adapter: ChatGptBrainAdapter, ...chatGpt },
+    };
+  }
+  return { ...chatGpt, confidenceThreshold: brainConfig.confidenceThreshold };
 }
 
 @Module({
@@ -167,9 +188,10 @@ function resolveBrainAdapter() {
       entryPoint: PlannerConversationEntry,
       brainAdapter: resolveBrainAdapter(),
       eventListeners: [StudioEventBuffer],
-      brain: {
-        model: brainConfig.model,
-        confidenceThreshold: brainConfig.confidenceThreshold,
+      brain: resolveStudioBrain(),
+      limits: {
+        endMessage:
+          "We've been talking for a while, so I'm going to end this call now. Please call back if you still need help.",
       },
       intentions: [
         MadDetectIntention,
@@ -338,7 +360,9 @@ export class AppModule implements OnModuleInit {
     }
 
     this.logger.log(
-      `Brain driver=${brainConfig.adapter} model=${brainConfig.model} threshold=${brainConfig.confidenceThreshold}`,
+      brainConfig.adapter === 'studio-openai-decisions'
+        ? `Brain driver=${brainConfig.adapter} model=${brainConfig.decisions.model} llm=${brainConfig.model} threshold=${brainConfig.confidenceThreshold}`
+        : `Brain driver=${brainConfig.adapter} model=${brainConfig.model} threshold=${brainConfig.confidenceThreshold}`,
     );
 
     if (this.brain instanceof MockBrainAdapter) {
